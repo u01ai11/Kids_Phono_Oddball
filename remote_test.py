@@ -2,6 +2,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import mne
+import joblib # for mne multithreading
 import os
 from os import listdir
 from os.path import isfile, join
@@ -56,23 +57,30 @@ else: # flag for manual ICA inspection and removal
 struct_dir = '/imaging/ai05/phono_oddball/structurals_renamed' # TODO: this dir to be passed in
 fs_sub_dir = '/imaging/ai05/phono_oddball/fs_subdir' # TODO: this also needs to be parsed in
 if os.path.isdir(fs_sub_dir):
-    init_call = 'freesurfer_6.0.0'
-    set_dir_call = 'setenv SUBJECTS_DIR ' + fs_sub_dir
+    os.system(f"tcsh -c 'freesurfer_6.0.0 && setenv SUBJECTS_DIR {fs_sub_dir}'")
 else:
-    init_call = 'freesurfer_6.0.0'
-    mkdir_call = 'mkdir ' + fs_sub_dir
-    set_dir_call = 'export SUBJECTS_DIR=' + fs_sub_dir
+    os.system(f"tcsh -c 'freesurfer_6.0.0 && mkdir {fs_sub_dir} && setenv SUBJECTS_DIR {fs_sub_dir}'")
+
 f_only = os.path.basename(tmpfile).split('_') # get filename parts seperated by _
 num = f_only[0] # first in this list is the participant id
 T1_name = num + '_T1w.nii.gz'
 
 if os.path.isfile(struct_dir + '/' + T1_name):
-
-    fs_call = 'recon-all -i ' + struct_dir+'/'+ T1_name + ' -s ' + num + ' -all -parallel'
-
+    os.system(f"tcsh -c 'recon-all -i {struct_dir}/{T1_name} -s {num} -all -parallel'")
 else:
+    print('no T1 found for ' + num)
 
-#%%
+#%% Source-space
+#TODO: We are using Edwin's brain for now, this needs to be changed later
+fs_sub = 'edwin_2019' # subname
+# compute source space
+src_space = mne.setup_source_space(fs_sub, spacing='oct6', surface='white', subjects_dir=fs_sub_dir, n_jobs=2)
+mne.write_source_spaces(fs_sub_dir+'/'+ fs_sub + '/'+ fs_sub+'-oct6-src.fif', src_space) # write to freesurfer dir
+# compute Boundary Element Model
+# use os.system to run this in tcsh shell setup freesurfer and subject dir as well
+os.system(f"tcsh -c 'freesurfer_6.0.0 && setenv SUBJECTS_DIR && mne watershed_bem -s {fs_sub} -d {fs_sub_dir}'")
+os.system(term_command)
+
 
 
 
