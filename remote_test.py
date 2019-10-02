@@ -24,7 +24,7 @@ raw.notch_filter(np.arange(50, 241, 50), picks=picks, filter_length='auto',
                  phase='zero')
 
 # 0.1Hz highpass filter to remove slow drift
-raw.filter(0.1, None, l_trans_bandwidth='auto', filter_length='auto',
+raw.filter(1, None, l_trans_bandwidth='auto', filter_length='auto',
            phase='zero')
 
 # ICA to detect EOG (blinks)
@@ -38,13 +38,46 @@ if np.any([abs(i) >= 0.3 for i in eog_scores]):
     ica.apply(inst=raw)  # apply to raw
 
 else: # flag for manual ICA inspection and removal
+    # TODO: Practically this should be moved to after all autodetect is done. This way we don't waste time waiting for
+    # user input
     ica.plot_components(inst=raw)
     print('There is no components automatically corellated with blinks')
-    print('This is usually because the EOG electrode is bad so select components manually')
+    print('This is usually because the EOG electrode is bad so select components manually:')
+    man_inds = list()
+    num = int(input("Enter how many components to get rid of:"))
+    print('Enter each index (remember 1 = 0 in Python):')
+    for i in range(int(num)):
+        n = input("num :")
+        man_inds.append(int(n))
+    ica.exclude.extend(man_inds)
+    ica.apply(inst=raw)
+
+#%% Construct Source Model -- FreeSurfer
+struct_dir = '/imaging/ai05/phono_oddball/structurals_renamed' # TODO: this dir to be passed in
+fs_sub_dir = '/imaging/ai05/phono_oddball/fs_subdir' # TODO: this also needs to be parsed in
+if os.path.isdir(fs_sub_dir):
+    init_call = 'freesurfer_6.0.0'
+    set_dir_call = 'setenv SUBJECTS_DIR ' + fs_sub_dir
+else:
+    init_call = 'freesurfer_6.0.0'
+    mkdir_call = 'mkdir ' + fs_sub_dir
+    set_dir_call = 'export SUBJECTS_DIR=' + fs_sub_dir
+f_only = os.path.basename(tmpfile).split('_') # get filename parts seperated by _
+num = f_only[0] # first in this list is the participant id
+T1_name = num + '_T1w.nii.gz'
+
+if os.path.isfile(struct_dir + '/' + T1_name):
+
+    fs_call = 'recon-all -i ' + struct_dir+'/'+ T1_name + ' -s ' + num + ' -all -parallel'
+
+else:
+
+#%%
 
 
 
 
+#%%
 # Extract before downsampling to avoid precision errors
 events = mne.find_events(raw) # find events from file
 event_id = {'Freq': 10, 'Dev Word': 11, 'Dev Non-Word': 12}  # trigger codes for events
