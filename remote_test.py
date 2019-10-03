@@ -7,6 +7,15 @@ import os
 from os import listdir
 from os.path import isfile, join
 
+"""
+TEST SCRIPT 
+
+This is more of a sandbox script where I can get the pipeline working.
+
+Once this all works on one subject I will then move this into different modules and tie in a group analysis using..
+
+thise modules 
+"""
 import mne_preprocess
 #%% set up the folder
 rawdir = '/imaging/ai05/phono_oddball/maxfilt_raws'  # raw fifs
@@ -97,11 +106,14 @@ epochs = mne.Epochs.decimate(epochs, 1) # downsample to 10hz
 epochs.save(f'{mne_save_dir}/{num}_{f_only[2]}_epo.fif')
 #epochs = mne.read_epochs(f'{mne_save_dir}/{num}_{f_only[2]}_epo.fif') # if needed
 
-#%% INVOKED
+#%% EVOKED
 evoked = epochs.average();
 evoked.save(f'{mne_save_dir}/{num}_{f_only[2]}_ave.fif')
+# TODO: check the read function, it returns a list for some reason
 # evoked = mne.read_evokeds(f'{mne_save_dir}/{num}_{f_only[2]}_ave.fif') # if needed
 
+#multiple conditions
+evokeds = [epochs[name].average() for name in ('Freq', 'Dev Word', 'Dev Non-Word')]
 #%% Construct Source Model -- FreeSurfer
 struct_dir = '/imaging/ai05/phono_oddball/structurals_renamed'  # TODO: this dir to be passed in
 fs_sub_dir = '/imaging/ai05/phono_oddball/fs_subdir'  # TODO: this also needs to be passed in
@@ -158,8 +170,28 @@ mne.write_cov(f'{source_dir}/{fs_sub}_{f_only[2]}-cov.fif', cov) # save this fil
 # cov = mne.read_cov(f'{source_dir}/{fs_sub}_{f_only[2]}-cov.fif') # if needed
 
 # calculate minimum norm inverse operator
-inv = mne.minimum_norm.make_inverse_operator(raw.info, fwd, cov, loose=0.2)
-stc = mne.minimum_norm.apply_inverse(evoked, inv, lambda2=1. / 9.)
-stc.plot()
-#%%
+inv = mne.minimum_norm.make_inverse_operator(raw.info, fwd, cov, loose=0.2, depth=0.8)
+
+#%% compute inverse solultion
+
+# MNE
+stc_mne = mne.minimum_norm.apply_inverse(evoked, inv, lambda2=1. / 9.)
+
+# plot
+stc_mne.plot(subjects_dir=fs_sub_dir, backend='matplotlib', hemi='lh', initial_time=.3)
+
+# plot using peak getter at the time point and spatial point of peak
+vertno_max, time_max = stc_mne.get_peak(hemi='lh')
+surfer_kwargs = dict(
+    hemi='lh', subjects_dir=fs_sub_dir, views='lat',
+    initial_time=time_max, time_unit='s', size=(800, 800), smoothing_steps=5, backend='matplotlib')
+brain = stc_mne.plot(**surfer_kwargs)
+#%% look at mismatch responses
+
+MNN = mne.combine_evoked([evokeds[0], -evokeds[1], -evokeds[2]], weights='equal')
+MNN_word = mne.combine_evoked([evokeds[0], -evokeds[2]], weights='equal')
+MNN_nonword = mne.combine_evoked([evokeds[0], -evokeds[1]], weights='equal')
+MNN_diff = mne.combine_evoked([MNN_word, -MNN_nonword], weights='equal')
+
+
 #mne_preprocess.process_multiple()
