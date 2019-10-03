@@ -4,7 +4,7 @@ import numpy as np
 import joblib
 
 
-def preprocess_multiple(flist, indir, outdir, overwrite):
+def preprocess_multiple(flist, indir, outdir, overwrite, njobs):
     """
     Parameters
     ----------
@@ -29,46 +29,18 @@ def preprocess_multiple(flist, indir, outdir, overwrite):
         os.mkdir(outdir)
 
     saved_files = []
-    for i in range(len(flist)):
-        savedfile = __preprocess_individual(os.path.join(indir, flist[i]), outdir, overwrite=overwrite)
-        saved_files.append(savedfile)
+
+    if njobs == 1:
+        for i in range(len(flist)):
+            savedfile = __preprocess_individual(os.path.join(indir, flist[i]), outdir, overwrite=overwrite)
+            saved_files.append(savedfile)
+    if njobs > 1:
+
+        joblib.Parallel(n_jobs =njobs)(
+            joblib.delayed(__preprocess_individual)(os.path.join(indir, thisF), outdir, overwrite) for thisF in flist)
 
     return saved_files
 
-def preprocess_multiple_parallel(flist, indir, outdir, overwrite, threads):
-    """
-    Parameters
-    ----------
-    Parallel version of the multiple. It uses joblib and 'loky' backend
-
-    :param flist:
-        A list of files we want to read in and pre-process
-    :param indir:
-        Where we find the files
-    :param outdir:
-        where we want to save those files
-    :param overwrite:
-        truee or false. whether to overwrite the files if already exist
-    :param threads:
-        how many threads we should limit this code to run on
-    :return saved_files:
-        A list of files we have saved
-    """
-
-    # first check if indir and outdir exist
-    # if not outdoor make it
-    # if not indir raise error
-    if not os.path.isdir(indir):
-        raise Exception(f'path {indir} does not exist, edit and try again')
-    if not os.path.isdir(outdir):
-        os.mkdir(outdir)
-
-    saved_files = []
-    for i in range(len(flist)):
-        savedfile = __preprocess_individual(os.path.join(indir, flist[i]), outdir, overwrite=overwrite)
-        saved_files.append(savedfile)
-
-    return saved_files
 
 def __preprocess_individual(file, outdir, overwrite):
     """
@@ -156,5 +128,85 @@ def __preprocess_individual(file, outdir, overwrite):
     # save the file
     raw.save(f'{outdir}/{num}_{f_only[2]}_clean_raw.fif', overwrite=overwrite)
     save_file_path = f'{outdir}/{num}_{f_only[2]}_clean_raw.fif'
+    # return
+    return save_file_path
+
+def epoch_multiple(flist, indir, outdir, keys, trigchan, times, overwrite, njobs):
+    """
+    Parameters
+    ----------
+    :param flist:
+        A list of files we want to read in and pre-process
+    :param indir:
+        Where we find the files
+    :param outdir:
+        where we want to save those files
+    :param keys:
+        dictionary pairs of labels and trigger numbers for events
+    :param trigchan:
+        the channel to look for trigger from
+    :param times:
+        list of two times to index from
+    :param overwrite:
+        truee or false. whether to overwrite the files if already exist
+    :param njobs:
+        the number of jobs for parallel/batch processing
+    :return saved_files:
+        A list of files we have saved
+    """
+
+    # first check if indir and outdir exist
+    # if not outdoor make it
+    # if not indir raise error
+    if not os.path.isdir(indir):
+        raise Exception(f'path {indir} does not exist, edit and try again')
+    if not os.path.isdir(outdir):
+        os.mkdir(outdir)
+
+    saved_files = []
+
+    if njobs == 1:
+        for i in range(len(flist)):
+            savedfile = __epoch_individual(os.path.join(indir, flist[i]), outdir, keys, trigchan, times, overwrite)
+            saved_files.append(savedfile)
+    if njobs > 1:
+
+        joblib.Parallel(n_jobs =njobs)(
+            joblib.delayed(__epoch_individual)(os.path.join(indir, thisF), outdir, keys, trigchan, times, overwrite) for thisF in flist)
+
+    return saved_files
+
+def __epoch_individual(file, outdir, keys, trigchan , times ,overwrite):
+    """
+    :param file:
+        input file along with path
+    :param outdir:
+        where we want to save this
+    :return: save_file_path:
+        a path to the saved and filtered file
+
+
+    """
+    raw = mne.io.read_raw_fif(file, preload=True)
+    f_only = os.path.basename(file).split('_')  # get filename parts seperated by _
+    num = f_only[0]
+
+    # check if file exists, if not overwrite then skip and return path
+    if os.path.isfile(f'{outdir}/{num}_{f_only[2]}_clean_raw.fif'):
+        if not overwrite:
+            print(f'file for {num} run {f_only[2]} already exists, skipping to next')
+            save_file_path = f'{outdir}/{num}_{f_only[2]}_clean_raw.fif'
+            return save_file_path
+
+    events = mne.find_events(raw)  # find events
+    picks = mne.pick_types(raw.info, meg=True, eog=True, ecg=True, include=trigchan, exclude='bads')  # select channels
+    tmin, tmax = times[0], times[1]
+    #make epochs from picks and events
+    epochs = mne.Epochs(raw, events, keys, tmin, tmax, picks=picks, baseline=(None, 0), preload=True)
+    #downsample and decimate epochs
+    epochs = mne.Epochs.decimate(epochs, 1)  # downsample to 10hz
+    #save
+    epochs.save(f'{outdir}/{num}_{f_only[2]}_epo.fif')
+    save_file_path = f'{outdir}/{num}_{f_only[2]}_epo.fif'
     # return
     return save_file_path
