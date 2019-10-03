@@ -1,9 +1,10 @@
 import mne
 import os
 import numpy as np
+import joblib
 
 
-def preprocess_multiple(flist, indir, outdir):
+def preprocess_multiple(flist, indir, outdir, overwrite):
     """
     Parameters
     ----------
@@ -13,6 +14,8 @@ def preprocess_multiple(flist, indir, outdir):
         Where we find the files
     :param outdir:
         where we want to save those files
+    :param overwrite:
+        truee or false. whether to overwrite the files if already exist
     :return saved_files:
         A list of files we have saved
     """
@@ -27,12 +30,47 @@ def preprocess_multiple(flist, indir, outdir):
 
     saved_files = []
     for i in range(len(flist)):
-        saved_files[i] = __preprocess_individual(os.path.join(indir, flist[i]), outdir)
+        savedfile = __preprocess_individual(os.path.join(indir, flist[i]), outdir, overwrite=overwrite)
+        saved_files.append(savedfile)
 
     return saved_files
 
+def preprocess_multiple_parallel(flist, indir, outdir, overwrite, threads):
+    """
+    Parameters
+    ----------
+    Parallel version of the multiple. It uses joblib and 'loky' backend
 
-def __preprocess_individual(file, outdir):
+    :param flist:
+        A list of files we want to read in and pre-process
+    :param indir:
+        Where we find the files
+    :param outdir:
+        where we want to save those files
+    :param overwrite:
+        truee or false. whether to overwrite the files if already exist
+    :param threads:
+        how many threads we should limit this code to run on
+    :return saved_files:
+        A list of files we have saved
+    """
+
+    # first check if indir and outdir exist
+    # if not outdoor make it
+    # if not indir raise error
+    if not os.path.isdir(indir):
+        raise Exception(f'path {indir} does not exist, edit and try again')
+    if not os.path.isdir(outdir):
+        os.mkdir(outdir)
+
+    saved_files = []
+    for i in range(len(flist)):
+        savedfile = __preprocess_individual(os.path.join(indir, flist[i]), outdir, overwrite=overwrite)
+        saved_files.append(savedfile)
+
+    return saved_files
+
+def __preprocess_individual(file, outdir, overwrite):
     """
     :param file:
         input file along with path
@@ -47,8 +85,16 @@ def __preprocess_individual(file, outdir):
     f_only = os.path.basename(file).split('_')  # get filename parts seperated by _
     num = f_only[0]
 
+    # check if file exists, if not overwrite then skip and return path
+    if os.path.isfile(f'{outdir}/{num}_{f_only[2]}_clean_raw.fif'):
+        if not overwrite:
+            print(f'file for {num} run {f_only[2]} already exists, skipping to next')
+            save_file_path = f'{outdir}/{num}_{f_only[2]}_clean_raw.fif'
+            return save_file_path
+
+
     # 50 Hz remove power line noise with a notch filter
-    raw.notch_filter(np.arange(50, 241, 50), picks=picks, filter_length='auto',
+    raw.notch_filter(np.arange(50, 241, 50), filter_length='auto',
                      phase='zero')
 
     # 1Hz highpass filter to remove slow drift (might have to revisit this as ICA works better with 1Hz hp)
@@ -108,7 +154,7 @@ def __preprocess_individual(file, outdir):
         ica.apply(inst=raw)
 
     # save the file
-    raw.save(f'{outdir}/{num}_{f_only[2]}_clean_raw.fif')
+    raw.save(f'{outdir}/{num}_{f_only[2]}_clean_raw.fif', overwrite=overwrite)
     save_file_path = f'{outdir}/{num}_{f_only[2]}_clean_raw.fif'
     # return
     return save_file_path

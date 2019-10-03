@@ -13,4 +13,4 @@ fs_sub_dir = '/imaging/ai05/phono_oddball/fs_subdir' # fresurfer subject dir
 flist = [f for f in os.listdir(rawdir) if os.path.isfile(os.path.join(rawdir, f))]
 
 # preprocess those files
-saved_list = red_meg_tools.preprocess_multiple(flist=flist[0:4], indir=rawdir, outdir=mne_save_dir)
+saved_list = red_meg_tools.preprocess_multiple(flist=flist[0:4], indir=rawdir, outdir=mne_save_dir, overwrite=False)
