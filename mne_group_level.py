@@ -1,6 +1,6 @@
 import red_meg_tools
 import os
-
+import collections
 # pointers to our directories
 rawdir = '/imaging/ai05/phono_oddball/maxfilt_raws'   # raw fifs to input
 mne_save_dir = '/imaging/ai05/phono_oddball/mne_files'  # where to save MNE MEG files
@@ -36,4 +36,9 @@ saved_epoch_list = red_meg_tools.epoch_multiple(flist=flist[0:8],
                                                 njobs=8)
 
 # compute evoked files from epoch list
-
+# list of contrasts
+contlist = collections.OrderedDict({
+    'MNN': [0, -1, -2],
+    'MNN Word': [0, -1],
+    'MNN Non-Word': [0, -2]
+})

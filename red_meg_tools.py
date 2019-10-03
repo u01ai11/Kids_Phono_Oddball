@@ -2,7 +2,7 @@ import mne
 import os
 import numpy as np
 import joblib
-
+import collections
 
 def preprocess_multiple(flist, indir, outdir, overwrite, njobs):
     """ Takes a list of raw files and preprocesses them
@@ -219,7 +219,7 @@ def __epoch_individual(file, outdir, keys, trigchan , times ,overwrite):
     # return
     return save_file_path
 
-def evoked_multiple(flist, indir, outdir, condlist, contlist, overwrite, njobs):
+def evoked_multiple(flist, indir, outdir, contlist, contlist_2, overwrite, njobs):
     """ Creates a series of evoked files for each particpant
     Parameters
     ----------
@@ -229,11 +229,24 @@ def evoked_multiple(flist, indir, outdir, condlist, contlist, overwrite, njobs):
         Where we find the files
     :param outdir:
         where we want to save those files
-    :param condlist:
-        list of conditions that events represent
     :param contlist:
-        a dict for contrasts to make with combine evoked
-        this have to be int the form [[], [], []]
+        an ordered dict for contrasts to make with combine evoked
+        format e.g.
+        contlist = {
+            'MNN': [0, -1, -2],
+            'MNN Word': [0, -1],
+            'MNN Non-Word': [0, -2]
+        }
+        each key is a contrast label, the values are a list of indices, with the sign
+        refering to the waiting of each item.
+        These indices match onto the keys we passed through in the epoching stage
+    :param contlist_2:
+        another ordered dict describing contrasts of the contrasts to be made
+        e.g.
+        contlist2 = {
+            'MNN_diff' = [1, -2]
+        }
+        this time the indices refer to the position in contlist
     :param overwrite:
         truee or false. whether to overwrite the files if already exist
     :param njobs:
@@ -254,16 +267,16 @@ def evoked_multiple(flist, indir, outdir, condlist, contlist, overwrite, njobs):
 
     if njobs == 1:
         for i in range(len(flist)):
-            savedfile = __evoked_individual(os.path.join(indir, flist[i]), outdir, overwrite)
+            savedfile = __evoked_individual(os.path.join(indir, flist[i]), outdir, contlist, contlist_2, overwrite)
             saved_files.append(savedfile)
     if njobs > 1:
 
         saved_files = joblib.Parallel(n_jobs =njobs)(
-            joblib.delayed(__evoked_individual)(os.path.join(indir, thisF), outdir,  overwrite) for thisF in flist)
+            joblib.delayed(__evoked_individual)(os.path.join(indir, thisF), outdir, contlist, contlist_2,  overwrite) for thisF in flist)
 
     return saved_files
 
-def __evoked_individual(file, outdir, condlist, overwrite):
+def __evoked_individual(file, outdir, contlist, contlist2, overwrite):
     """ Internal function to make evoked from raw files
     :param file:
         input file along with path
@@ -279,7 +292,7 @@ def __evoked_individual(file, outdir, condlist, overwrite):
     num = f_only[0]
 
     # check if output file(s) exist, if not overwrite then skip and return path
-    if os.path.isfile(f'{mne_save_dir}/{num}_{f_only[2]}_ave.fif'):
+    if os.path.isfile(f'{outdir}/{num}_{f_only[2]}_ave.fif'):
         if not overwrite:
             print(f'file for {num} run {f_only[2]} already exists, skipping to next')
             save_file_path = f'{outdir}/{num}_{f_only[2]}_ave.fif'

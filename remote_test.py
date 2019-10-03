@@ -189,8 +189,8 @@ brain = stc_mne.plot(**surfer_kwargs)
 #%% look at mismatch responses
 
 MNN = mne.combine_evoked([evokeds[0], -evokeds[1], -evokeds[2]], weights='equal')
-MNN_word = mne.combine_evoked([evokeds[0], -evokeds[2]], weights='equal')
-MNN_nonword = mne.combine_evoked([evokeds[0], -evokeds[1]], weights='equal')
+MNN_word = mne.combine_evoked([evokeds[0], -evokeds[1]], weights='equal')
+MNN_nonword = mne.combine_evoked([evokeds[0], -evokeds[2]], weights='equal')
 MNN_diff = mne.combine_evoked([MNN_word, -MNN_nonword], weights='equal')
 
 
