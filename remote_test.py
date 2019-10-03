@@ -37,7 +37,7 @@ picks = mne.pick_channels_regexp(raw.ch_names, regexp='MEG.')
 raw.notch_filter(np.arange(50, 241, 50), picks=picks, filter_length='auto',
                  phase='zero')
 
-# 0.1Hz highpass filter to remove slow drift (might have to revisit this as ICA works better with 1Hz hp)
+# 1Hz highpass filter to remove slow drift (might have to revisit this as ICA works better with 1Hz hp)
 raw.filter(1, None, l_trans_bandwidth='auto', filter_length='auto',
            phase='zero')
 
