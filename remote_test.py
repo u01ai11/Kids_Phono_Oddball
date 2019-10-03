@@ -82,7 +82,8 @@ else: # flag for manual ICA inspection and removal
 
 #%% Save the filtered and ICA cleaned raw data
 raw.save(f'{mne_save_dir}/{num}_{f_only[2]}_clean_raw.fif')
-#%%
+# raw = mne.io.read_raw_fif(f'{mne_save_dir}/{num}_{f_only[2]}_clean_raw.fif') # if needed
+#%% EPOCHS
 # Extract before downsampling to avoid precision errors
 events = mne.find_events(raw) # find events from file
 event_id = {'Freq': 10, 'Dev Word': 11, 'Dev Non-Word': 12}  # trigger codes for events
@@ -95,6 +96,12 @@ epochs = mne.Epochs(raw, events, event_id, tmin, tmax, picks=picks, baseline=(No
 epochs = mne.Epochs.decimate(epochs, 1) # downsample to 10hz
 epochs.save(f'{mne_save_dir}/{num}_{f_only[2]}_epo.fif')
 #epochs = mne.read_epochs(f'{mne_save_dir}/{num}_{f_only[2]}_epo.fif') # if needed
+
+#%% INVOKED
+evoked = epochs.average();
+evoked.save(f'{mne_save_dir}/{num}_{f_only[2]}_ave.fif')
+# evoked = mne.read_evokeds(f'{mne_save_dir}/{num}_{f_only[2]}_ave.fif') # if needed
+
 #%% Construct Source Model -- FreeSurfer
 struct_dir = '/imaging/ai05/phono_oddball/structurals_renamed'  # TODO: this dir to be passed in
 fs_sub_dir = '/imaging/ai05/phono_oddball/fs_subdir'  # TODO: this also needs to be passed in
@@ -139,13 +146,20 @@ mne.write_bem_solution(f'{source_dir}/{fs_sub}-5120-5120-5120-bem-sol.fif', bem_
 # Co-registration # TODO: We cannot currently do this over remote ssh, make a loop for all participants
 mne.gui.coregistration(inst=f'{mne_save_dir}/{num}_{f_only[2]}_epo.fif', subject=fs_sub, subjects_dir=fs_sub_dir)
 trans = f'{mne_save_dir}/{num}_{f_only[2]}_coreg-trans.fif'
+
 # compute forward solution
 fwd = mne.make_forward_solution(raw.info, trans, src_space, bem_sol)
 mne.write_forward_solution(f'{source_dir}/{fs_sub}_{f_only[2]}-fwd.fif', fwd) #save
 # fwd = mne.read_forward_solution(f'{source_dir}/{fs_sub}_{f_only[2]}-fwd.fif') # if needed
+
 # compute covariance matrix on epochs
 cov = mne.compute_covariance(epochs, method=['shrunk', 'empirical'], rank=None) # this is quicker still takes a while
 mne.write_cov(f'{source_dir}/{fs_sub}_{f_only[2]}-cov.fif', cov) # save this file
 # cov = mne.read_cov(f'{source_dir}/{fs_sub}_{f_only[2]}-cov.fif') # if needed
+
+# calculate minimum norm inverse operator
+inv = mne.minimum_norm.make_inverse_operator(raw.info, fwd, cov, loose=0.2)
+stc = mne.minimum_norm.apply_inverse(evoked, inv, lambda2=1. / 9.)
+stc.plot()
 #%%
 #mne_preprocess.process_multiple()
