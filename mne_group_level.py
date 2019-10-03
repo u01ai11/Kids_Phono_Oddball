@@ -19,6 +19,7 @@ saved_list = red_meg_tools.preprocess_multiple(flist=flist[0:8],
                                                overwrite=False,
                                                njobs=8)
 
+
 # make a list of files for epoching from above
 flist = [os.path.basename(x) for x in saved_list] # get filenames only
 
@@ -33,3 +34,6 @@ saved_epoch_list = red_meg_tools.epoch_multiple(flist=flist[0:8],
                                                 times=[-0.2, 0.8],
                                                 overwrite=False,
                                                 njobs=8)
+
+# compute evoked files from epoch list
+
