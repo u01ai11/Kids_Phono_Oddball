@@ -98,7 +98,7 @@ def __epoch_individual(file, outdir, keys, trigchan , times ,overwrite):
     # return
     return save_file_path
 
-def evoked_multiple(flist, indir, outdir, contlist, contlist2, overwrite, njobs):
+def evoked_multiple(flist, indir, outdir, keys, contlist, contlist2, overwrite, njobs):
     """ Creates a series of evoked files for each particpant
     Parameters
     ----------
@@ -108,6 +108,9 @@ def evoked_multiple(flist, indir, outdir, contlist, contlist2, overwrite, njobs)
         Where we find the files
     :param outdir:
         where we want to save those files
+    :param keys:
+        As in epoch, these are the keys for trigger values we want.
+        Must match those from epoch
     :param contlist:
         an ordered dict for contrasts to make with combine evoked
         format e.g.
@@ -146,21 +149,24 @@ def evoked_multiple(flist, indir, outdir, contlist, contlist2, overwrite, njobs)
 
     if njobs == 1:
         for i in range(len(flist)):
-            savedfile = __evoked_individual(os.path.join(indir, flist[i]), outdir, contlist, contlist_2, overwrite)
+            savedfile = __evoked_individual(os.path.join(indir, flist[i]), outdir, keys, contlist, contlist_2, overwrite)
             saved_files.append(savedfile)
     if njobs > 1:
 
         saved_files = joblib.Parallel(n_jobs =njobs)(
-            joblib.delayed(__evoked_individual)(os.path.join(indir, thisF), outdir, contlist, contlist_2,  overwrite) for thisF in flist)
+            joblib.delayed(__evoked_individual)(os.path.join(indir, thisF), outdir, keys, contlist, contlist_2,  overwrite) for thisF in flist)
 
     return saved_files
 
-def __evoked_individual(file, outdir, contlist, contlist2, overwrite):
+def __evoked_individual(file, outdir, keys, contlist, contlist2, overwrite):
     """ Internal function to make evoked from raw files
     :param file:
         input file along with path
     :param outdir:
-        where we want to save thi
+        where we want to save this
+    :param keys:
+        As in epoch, these are the keys for trigger values we want.
+        Must match those from epoch
     :param contlist:
         an ordered dict for contrasts to make with combine evoked
         format e.g.
@@ -199,9 +205,28 @@ def __evoked_individual(file, outdir, contlist, contlist2, overwrite):
     # read in the evoked file
     epochs = mne.read_epochs(file)
     evoked = epochs.average()
-    save_file_path = f'{outdir}/{num}_{f_only[2]}_ave.fif'
+    ev_file_path = f'{outdir}/{num}_{f_only[2]}_ave.fif'
+    evoked.save(ev_file_path) # save main average
 
-    evokeds = [epochs[name].average() for name in ('Freq', 'Dev Word', 'Dev Non-Word')]
+    # split up by epoch type using key values
+    keys_keys = [i for i in keys.keys()]
+    evokeds = [epochs[name].average() for name in keys_keys]
+
+    conts = list(contlist.items())
+    evoked_cs = [] # blank list
+    # calculate contrasts
+    for i in len(conts):
+        # get name and contast index/weightings
+        c_name, cons = conts[i]
+
+        in_args = []
+        for ii in len(cons):
+            in_args.append(np.sign(cons[ii]) * evokeds[abs(cons[ii])])
+        tmp_c = mne.combine_evoked([], weights='equal')
+
+
+    # loop through contrasts
+
 
     save_file_path = f'{outdir}/{num}_{f_only[2]}_ave.fif'
     # return
