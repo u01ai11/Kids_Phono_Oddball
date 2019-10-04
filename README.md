@@ -8,14 +8,15 @@ Currently a written out script, but developing into a modular analysis script fo
 
 Overview
 -
+
+RedMegTools
+- This is a module containing submodules to help with bulk processing.
+- RedMegTools.preprocess: allows filtering and ICA denoising
+- RedMegTools.epoch: both epoching and evoked response calculation
+- RedMegTools.sourcespace: will contain scripts for building source models.
+
 mne_group_level.py: 
 - Contains the pipeline for bulk processing, epoching, evoked, source-recon etc
-
-red_meg_tooks.py:
-- this is a module containing functions for running different group stages.
-- public functions run through a list of files.
-- private functions process each of these files.
-- each _multiple function has an njobs argument allowing parallel processing. 
 
 remote_test.py
 - contains a sandbox example pipeline for one participant.
