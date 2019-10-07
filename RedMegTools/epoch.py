@@ -72,10 +72,10 @@ def __epoch_individual(file, outdir, keys, trigchan , times ,overwrite):
 
     # check if file exists, if not overwrite then skip and return path
     # TODO: write this so it partial matches and looks for _noecg and _noeog flags in raw data
-    if os.path.isfile(f'{outdir}/{num}_{f_only[2]}_epo.fif'):
+    if os.path.isfile(f'{outdir}/{num}_{f_only[1]}_epo.fif'):
         if not overwrite:
-            print(f'file for {num} run {f_only[2]} already exists, skipping to next')
-            save_file_path = f'{outdir}/{num}_{f_only[2]}_epo.fif'
+            print(f'file for {num} run {f_only[1]} already exists, skipping to next')
+            save_file_path = f'{outdir}/{num}_{f_only[1]}_epo.fif'
             return save_file_path
 
     try:
@@ -93,8 +93,8 @@ def __epoch_individual(file, outdir, keys, trigchan , times ,overwrite):
     #downsample and decimate epochs
     epochs = mne.Epochs.decimate(epochs, 1)  # downsample to 10hz
     #save
-    epochs.save(f'{outdir}/{num}_{f_only[2]}_epo.fif')
-    save_file_path = f'{outdir}/{num}_{f_only[2]}_epo.fif'
+    epochs.save(f'{outdir}/{num}_{f_only[1]}_epo.fif')
+    save_file_path = f'{outdir}/{num}_{f_only[1]}_epo.fif'
     # return
     return save_file_path
 
@@ -149,14 +149,15 @@ def evoked_multiple(flist, indir, outdir, keys, contlist, contlist2, overwrite, 
 
     if njobs == 1:
         for i in range(len(flist)):
-            savedfile = __evoked_individual(os.path.join(indir, flist[i]), outdir, keys, contlist, contlist_2, overwrite)
+            savedfile = __evoked_individual(os.path.join(indir, flist[i]), outdir, keys, contlist, contlist2, overwrite)
             saved_files.append(savedfile)
     if njobs > 1:
 
         saved_files = joblib.Parallel(n_jobs =njobs)(
-            joblib.delayed(__evoked_individual)(os.path.join(indir, thisF), outdir, keys, contlist, contlist_2,  overwrite) for thisF in flist)
+            joblib.delayed(__evoked_individual)(os.path.join(indir, thisF), outdir, keys, contlist, contlist2,  overwrite) for thisF in flist)
 
     return saved_files
+
 
 def __evoked_individual(file, outdir, keys, contlist, contlist2, overwrite):
     """ Internal function to make evoked from raw files
@@ -202,11 +203,14 @@ def __evoked_individual(file, outdir, keys, contlist, contlist2, overwrite):
             save_file_path = f'{outdir}/{num}_{f_only[2]}_ave.fif'
             return save_file_path
 
+    # this will be a list of fnames
+    saved_file_path = []
     # read in the evoked file
     epochs = mne.read_epochs(file)
     evoked = epochs.average()
     ev_file_path = f'{outdir}/{num}_{f_only[2]}_ave.fif'
     evoked.save(ev_file_path) # save main average
+    saved_file_path.append(ev_file_path) # append to list to store
 
     # split up by epoch type using key values
     keys_keys = [i for i in keys.keys()]
@@ -215,19 +219,46 @@ def __evoked_individual(file, outdir, keys, contlist, contlist2, overwrite):
     conts = list(contlist.items())
     evoked_cs = [] # blank list
     # calculate contrasts
-    for i in len(conts):
+    for i in range(len(conts)):
         # get name and contast index/weightings
         c_name, cons = conts[i]
-
         in_args = []
-        for ii in len(cons):
-            in_args.append(np.sign(cons[ii]) * evokeds[abs(cons[ii])])
-        tmp_c = mne.combine_evoked([], weights='equal')
+        # loop through and start building input arguments
+        # TODO: WARNING: this get's hacky find a better way to pass sign into combine_evoked
+        for ii in range(len(cons)):
+            if cons[ii] < 0:
+                in_args.append(f' -evokeds[{abs(cons[ii])}]')
+            else:
+                in_args.append(f' evokeds[{abs(cons[ii])}]')
 
+        in_args = ",".join(in_args)
+        full_arg = f"evoked_cs.append(mne.combine_evoked([{in_args}], weights='equal'))"
+        exec(full_arg)
 
-    # loop through contrasts
+    # second level subtractions
+    conts2 = list(contlist2.items())
+    evoked_cs2 = []  # blank list
+    # calculate contrasts
+    for i in range(len(conts2)):
+        # get name and contast index/weightings
+        c_name, cons = conts2[i]
+        in_args = []
+        # loop through and start building input arguments
+        # TODO: WARNING: this get's hacky find a better way to pass sign into combine_evoked
+        for ii in range(len(cons)):
+            if cons[ii] < 0:
+                in_args.append(f' -evoked_cs[{abs(cons[ii])}]')
+            else:
+                in_args.append(f' evoked_cs[{abs(cons[ii])}]')
 
+        in_args = ",".join(in_args)
+        full_arg = f"evoked_cs2.append(mne.combine_evoked([{in_args}], weights='equal'))"
+        exec(full_arg)
 
-    save_file_path = f'{outdir}/{num}_{f_only[2]}_ave.fif'
-    # return
-    return save_file_path
+    # loop through contrasts to save them with file names
+    for i in range(len(evoked_cs)):
+        tosave = f'{outdir}/{num}_{f_only[2]}_{conts[i][0]}_ave.fif'
+        evoked_cs[i].save(tosave)
+        saved_file_path.append(tosave)
+
+    return saved_file_path

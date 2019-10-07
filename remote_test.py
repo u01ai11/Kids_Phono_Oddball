@@ -114,6 +114,7 @@ evoked.save(f'{mne_save_dir}/{num}_{f_only[2]}_ave.fif')
 
 #multiple conditions
 evokeds = [epochs[name].average() for name in ('Freq', 'Dev Word', 'Dev Non-Word')]
+
 #%% Construct Source Model -- FreeSurfer
 struct_dir = '/imaging/ai05/phono_oddball/structurals_renamed'  # TODO: this dir to be passed in
 fs_sub_dir = '/imaging/ai05/phono_oddball/fs_subdir'  # TODO: this also needs to be passed in

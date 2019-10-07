@@ -37,20 +37,25 @@ saved_epoch_list = red_epoch.epoch_multiple(flist=flist[0:8],
                                             njobs=8)
 
 # compute evoked files from epoch list
-# list of contrasts
+# list of contrasts in ordered Dict -- first level contrasts
+# These indices refer to the keys above
+# The sign refers to their weighting
 contlist = collections.OrderedDict({
     'MNN': [0, -1, -2],
     'MNN Word': [0, -1],
     'MNN Non-Word': [0, -2]
 })
 
-# list of second contrasts (i.e. combining the above simple contrasts)
+# list of second level contrasts (i.e. combining the above simple contrasts)
+# indiced match onto first order contrasts
 contlist2 = collections.OrderedDict({
     'Word-Nonword': [1, -2]
 })
 
+# get an input file name list
 flist = [os.path.basename(x) for x in saved_epoch_list]
 
+# run the process
 saved_evoked_list = red_epoch.evoked_multiple(flist=flist[0:8],
                                               indir=mne_save_dir,
                                               outdir=mne_save_dir,
@@ -59,3 +64,5 @@ saved_evoked_list = red_epoch.evoked_multiple(flist=flist[0:8],
                                               contlist2=contlist2,
                                               overwrite=False,
                                               njobs=1)
+
+
