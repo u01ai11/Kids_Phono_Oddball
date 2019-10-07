@@ -4,7 +4,7 @@ import numpy as np
 import joblib
 
 
-def recon_all_multiple(sublist, struct_dir, fs_sub_dir, fs_call, njobs, cbu_clust)
+def recon_all_multiple(sublist, struct_dir, fs_sub_dir, fs_script_dir,fs_call, njobs, cbu_clust, cshrc_path):
 
     """
     :param sublist: 
@@ -21,6 +21,10 @@ def recon_all_multiple(sublist, struct_dir, fs_sub_dir, fs_call, njobs, cbu_clus
         Relates to no, of parallel jobs 
     :param cbu_clust: 
         If true this will submit jobs to the CBU cluster queue using 'qsub'
+    :param cshrc_path:
+        the path to cshrc setup file to ensure the os.system environment called
+        by python is setup for cluster calls properly. If this is not set they
+        will not run on the cluster properly
     :return: 
     """
     if not cbu_clust:
@@ -46,10 +50,12 @@ def recon_all_multiple(sublist, struct_dir, fs_sub_dir, fs_call, njobs, cbu_clus
         return saved_files
 
     else:
+        #setup environment
+        os.system(f'tcsh {cshrc_path}')
         saved_files = []
         # We are using CBU cluster so construct qstat jobs
         for i in range(len(sublist)):
-            savedfile = __recon_all_qstat(sublist[i], struct_dir, fs_sub_dir)
+            savedfile = __recon_all_qstat(sublist[i], struct_dir, fs_sub_dir, fs_script_dir)
             saved_files.append(savedfile)
 
 def __recon_all_individual(sub, struct_dir, fs_sub_dir):
@@ -75,7 +81,7 @@ def __recon_all_individual(sub, struct_dir, fs_sub_dir):
     this_sub_dir = f'{fs_sub_dir}/{sub}'
     return this_sub_dir
 
-def __recon_all_qstat(sub, struct_dir, fs_sub_dir):
+def __recon_all_qstat(sub, struct_dir, fs_sub_dir, fs_script_dir):
     """
     Private function for submitting source-recon freesurfer commands to CBU's cluster
     :param sub:
@@ -92,18 +98,17 @@ def __recon_all_qstat(sub, struct_dir, fs_sub_dir):
 
     # construct tcsh command
     qsub_com =\
-        f"""
-        #!/bin/tcsh
+        f"""#!/bin/tcsh
         freesurfer_6.0.0 
         setenv SUBJECTS_DIR {fs_sub_dir}
-        recon-all -i {struct_dir}/{T1_name} -s {sub} -parallel -openmp 8
+        recon-all -all -i {struct_dir}/{T1_name} -s {sub} -parallel -openmp 8
         """
     #save to a csh script
-    with open (f'{sub}.csh', "w") as c_file:
+    with open (f'{fs_script_dir}/{sub}.csh', "w+") as c_file:
         c_file.write(qsub_com)
 
     # construct the qsub command and execute
-    os.system(f"tcsh -c 'sbatch -job-name=reco_{sub} -mincpus=8 -t=2-1:10 {sub}.csh'")
+    os.system(f'sbatch --job-name=reco_{sub} --mincpus=8 -t 2-1:10 {fs_script_dir}/{sub}.csh')
 
     # submit
     this_sub_dir = f'{fs_sub_dir}/{sub}'

@@ -1,3 +1,4 @@
+#%%
 import RedMegTools.epoch as red_epoch
 import RedMegTools.preprocess as red_preprocess
 import RedMegTools.sourcespace as red_sourcespace
@@ -11,6 +12,7 @@ source_dir = '/imaging/ai05/phono_oddball/mne_source_models'  # where to save MN
 struct_dir = '/imaging/ai05/phono_oddball/structurals_renamed'  # where our structs are
 fs_sub_dir = '/imaging/ai05/phono_oddball/fs_subdir'  # fresurfer subject dir
 
+#%% PREPROCESSING
 # make a list of files for pre-processing
 flist = [f for f in os.listdir(rawdir) if os.path.isfile(os.path.join(rawdir, f))]
 
@@ -21,6 +23,7 @@ saved_list = red_preprocess.preprocess_multiple(flist=flist[0:8],
                                                 overwrite=False,
                                                 njobs=8)
 
+#%% EPOCHED
 # make a list of files for epoching from above
 flist = [os.path.basename(x) for x in saved_list]  # get filenames only
 
@@ -36,6 +39,7 @@ saved_epoch_list = red_epoch.epoch_multiple(flist=flist[0:8],
                                             overwrite=False,
                                             njobs=8)
 
+#%% EVOKED
 # compute evoked files from epoch list
 # list of contrasts in ordered Dict -- first level contrasts
 # These indices refer to the keys above
@@ -55,7 +59,7 @@ contlist2 = collections.OrderedDict({
 # get an input file name list
 flist = [os.path.basename(x) for x in saved_epoch_list]
 
-# run the process
+# run the process for getting evoked
 saved_evoked_list = red_epoch.evoked_multiple(flist=flist[0:8],
                                               indir=mne_save_dir,
                                               outdir=mne_save_dir,
@@ -65,4 +69,14 @@ saved_evoked_list = red_epoch.evoked_multiple(flist=flist[0:8],
                                               overwrite=False,
                                               njobs=1)
 
+#%% FREESURFER RECON
+subnames_only = list(set([x.split('_')[0] for x in flist])) # get a unique list of IDs
 
+fs_recon_list = red_sourcespace.recon_all_multiple(sublist=subnames_only,
+                                                   struct_dir= struct_dir,
+                                                   fs_sub_dir=fs_sub_dir,
+                                                   fs_script_dir='/imaging/ai05/phono_oddball/fs_scripts',
+                                                   fs_call='freesurfer_6.0.0',
+                                                   njobs=1,
+                                                   cbu_clust=True,
+                                                   cshrc_path='/home/ai05/.cshrc')
