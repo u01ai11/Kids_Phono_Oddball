@@ -64,10 +64,10 @@ def __preprocess_individual(file, outdir, overwrite):
                     f'{outdir}/{num}_{f_only[2]}_clean_raw.fif']
 
     if np.any([os.path.isfile(f) for f in check_fnames]):
-        index = np.where(check_fnames)[0]
+        index = np.where([os.path.isfile(f) for f in check_fnames])[0]
         if not overwrite:
             print(f'file for {num} run {f_only[2]} already exists, skipping to next')
-            save_file_path = check_fnames[index]
+            save_file_path = check_fnames[index[0]]
             return save_file_path
 
     # read file
