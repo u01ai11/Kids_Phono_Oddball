@@ -56,11 +56,18 @@ def __preprocess_individual(file, outdir, overwrite):
     f_only = os.path.basename(file).split('_')  # get filename parts seperated by _
     num = f_only[0]
 
-    # check if file exists, if not overwrite then skip and return path
-    if os.path.isfile(f'{outdir}/{num}_{f_only[2]}_clean_raw.fif'):
+    # check if any of these files exists, if not overwrite then skip and return path
+    # could be any of these names
+    check_fnames = [f'{outdir}/{num}_{f_only[2]}_noeog_noecg_clean_raw.fif',
+                    f'{outdir}/{num}_{f_only[2]}_noecg_clean_raw.fif',
+                    f'{outdir}/{num}_{f_only[2]}_noeog_clean_raw.fif',
+                    f'{outdir}/{num}_{f_only[2]}_clean_raw.fif']
+
+    if np.any([os.path.isfile(f) for f in check_fnames]):
+        index = np.where(check_fnames)[0]
         if not overwrite:
             print(f'file for {num} run {f_only[2]} already exists, skipping to next')
-            save_file_path = f'{outdir}/{num}_{f_only[2]}_clean_raw.fif'
+            save_file_path = check_fnames[index]
             return save_file_path
 
     # read file
