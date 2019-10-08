@@ -77,34 +77,41 @@ def __preprocess_individual(file, outdir, overwrite):
     # Run ICA on raw data to find blinks and eog
     ica = mne.preprocessing.ICA(n_components=25, method='infomax').fit(
         raw)
+    try:
+        # look for and remove EOG
+        eog_epochs = mne.preprocessing.create_eog_epochs(raw)  # get epochs of eog (if this exists)
+        eog_inds, eog_scores = ica.find_bads_eog(eog_epochs, threshold=1)  # try and find correlated components
 
-    # look for and remove EOG
-    eog_epochs = mne.preprocessing.create_eog_epochs(raw)  # get epochs of eog (if this exists)
-    eog_inds, eog_scores = ica.find_bads_eog(eog_epochs, threshold=1)  # try and find correlated components
+        # define flags for tracking if we found components matching or not
+        no_ecg_removed = False
+        no_eog_removed = False
 
-    # define flags for tracking if we found components matching or not
-    no_ecg_removed = False
-    no_eog_removed = False
+        # if we have identified something !
+        if np.any([abs(i) >= 0.2 for i in eog_scores]):
+            ica.exclude.extend(eog_inds[0:3])
 
-    # if we have identified something !
-    if np.any([abs(i) >= 0.2 for i in eog_scores]):
-        ica.exclude.extend(eog_inds[0:3])
+        else:
+            print(f'{num} run {f_only[2]} cannot detect eog automatically manual ICA must be done')
+            no_eog_removed = True
 
-    else:
+    except RuntimeError:
         print(f'{num} run {f_only[2]} cannot detect eog automatically manual ICA must be done')
         no_eog_removed = True
 
     # now we do this with hearbeat
+    try:
+        ecg_epochs = mne.preprocessing.create_ecg_epochs(raw)  # get epochs of eog (if this exists)
+        ecg_inds, ecg_scores = ica.find_bads_ecg(ecg_epochs, threshold=0.5)  # try and find correlated components
 
-    ecg_epochs = mne.preprocessing.create_ecg_epochs(raw)  # get epochs of eog (if this exists)
-    ecg_inds, ecg_scores = ica.find_bads_ecg(ecg_epochs, threshold=0.5)  # try and find correlated components
+        # if one component reaches above threshold then remove components automagically
+        if len(ecg_inds) > 0:
+            ica.exclude.extend(ecg_inds[0:3])  # exclude top 3 components
+            ica.apply(inst=raw)  # apply to raw
 
-    # if one component reaches above threshold then remove components automagically
-    if len(ecg_inds) > 0:
-        ica.exclude.extend(ecg_inds[0:3])  # exclude top 3 components
-        ica.apply(inst=raw)  # apply to raw
-
-    else:  # flag for manual ICA inspection and removal
+        else:  # flag for manual ICA inspection and removal
+            print(f'{num} run {f_only[2]} cannot detect ecg automatically manual ICA must be done')
+            no_ecg_removed = True
+    except RuntimeError:
         print(f'{num} run {f_only[2]} cannot detect ecg automatically manual ICA must be done')
         no_ecg_removed = True
 
