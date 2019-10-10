@@ -71,7 +71,11 @@ def __preprocess_individual(file, outdir, overwrite):
             return save_file_path
 
     # read file
-    raw = mne.io.read_raw_fif(file, preload=True)
+    try:
+        raw = mne.io.read_raw_fif(file, preload=True)
+    except OSError:
+        print('could not read ' + file)
+        return ''
 
     # 50 Hz remove power line noise with a notch filter
     raw.notch_filter(np.arange(50, 241, 50), filter_length='auto',
