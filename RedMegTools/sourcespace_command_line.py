@@ -31,7 +31,7 @@ def recon_all_multiple(sublist, struct_dir, fs_sub_dir, fs_script_dir,fs_call, n
         # set up
         # TODO: make bash version, this will only work on tcsh terminal
         # check if dir exists, make if not
-        if os.path.isdir(fs_sub_dir):
+        if os.p ath.isdir(fs_sub_dir):
             os.system(f"tcsh -c '{fs_call} && setenv SUBJECTS_DIR {fs_sub_dir}'")
         else:
             os.system(f"tcsh -c '{fs_call} && mkdir {fs_sub_dir} && setenv SUBJECTS_DIR {fs_sub_dir}'")
@@ -213,8 +213,9 @@ def __fs_bem_qstat(sub, fs_sub_dir, fs_script_dir):
         c_file.write(qsub_com)
 
     # construct the qsub command and execute
-    os.system(f'sbatch --job-name=reco_{sub} --mincpus=1 -t 0-1:00 {fs_script_dir}/{sub}_bem.csh')
+    os.system(f'sbatch --job-name=bem_{sub} --mincpus=1 -t 0-1:00 {fs_script_dir}/{sub}_bem.csh')
 
     # submit
     this_sub_dir = f'{fs_sub_dir}/{sub}'
     return this_sub_dir
+

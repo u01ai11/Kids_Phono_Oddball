@@ -1,7 +1,8 @@
 #%%
 import RedMegTools.epoch as red_epoch
 import RedMegTools.preprocess as red_preprocess
-import RedMegTools.sourcespace as red_sourcespace
+import RedMegTools.sourcespace_command_line as red_sourcespace_cmd
+import RedMegTools.sourcespace_setup as red_sourcespace_setup
 import os
 import collections
 
@@ -11,6 +12,9 @@ mne_save_dir = '/imaging/ai05/phono_oddball/mne_files'  # where to save MNE MEG 
 source_dir = '/imaging/ai05/phono_oddball/mne_source_models'  # where to save MNE source recon files
 struct_dir = '/imaging/ai05/phono_oddball/structurals_renamed'  # where our structs are
 fs_sub_dir = '/imaging/ai05/phono_oddball/fs_subdir'  # fresurfer subject dir
+
+flist = [f for f in os.listdir(rawdir) if os.path.isfile(os.path.join(rawdir, f))]
+subnames_only = list(set([x.split('_')[0] for x in flist])) # get a unique list of IDs
 
 #%% PREPROCESSING
 
@@ -78,7 +82,7 @@ saved_evoked_list = red_epoch.evoked_multiple(flist=flist,
 #%% FREESURFER RECON
 subnames_only = list(set([x.split('_')[0] for x in flist])) # get a unique list of IDs
 
-fs_recon_list = red_sourcespace.recon_all_multiple(sublist=subnames_only,
+fs_recon_list = red_sourcespace_cmd.recon_all_multiple(sublist=subnames_only,
                                                    struct_dir= struct_dir,
                                                    fs_sub_dir=fs_sub_dir,
                                                    fs_script_dir='/imaging/ai05/phono_oddball/fs_scripts',
@@ -91,11 +95,22 @@ fs_recon_list = red_sourcespace.recon_all_multiple(sublist=subnames_only,
 # get all participants who have a fs_dir
 fs_dir_all = os.listdir(fs_sub_dir)
 fs_dir_subs = [f for f in fs_dir_all if f in subnames_only]
-# run run
-fs_recon_list = red_sourcespace.fs_bem_multiple(sublist=fs_dir_subs,
+# run run run run
+fs_recon_list = red_sourcespace_cmd.fs_bem_multiple(sublist=fs_dir_subs,
                                                 fs_sub_dir=fs_sub_dir,
                                                 fs_script_dir='/imaging/ai05/phono_oddball/fs_scripts',
                                                 fs_call='freesurfer_6.0.0',
                                                 njobs=1,
                                                 cbu_clust=True,
                                                 cshrc_path='/home/ai05/.cshrc')
+
+#%% setup sourcespace in MNE format
+mne_src_dir = '/imaging/ai05/phono_oddball/mne_source_models'
+mne_src_files = red_sourcespace_setup.setup_src_multiple(sublist=fs_dir_subs,
+                                                         fs_sub_dir=fs_sub_dir,
+                                                         outdir=mne_src_dir,
+                                                         spacing='oct6',
+                                                         surface='white',
+                                                         n_jobs1=8,
+                                                         n_jobs2=1)
+#%%
