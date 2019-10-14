@@ -34,7 +34,7 @@ flist = [os.path.basename(x) for x in saved_list]  # get filenames only
 # epoch files from save list
 keys = {'Freq': 10, 'Dev Word': 11, 'Dev Non-Word': 12}  # pass in keys
 trigchan = 'STI101_up'  # pass in the trigger channel
-backup_trigchan = 'STI102_up'
+backup_trigchan = 'STI102'
 saved_epoch_list = red_epoch.epoch_multiple(flist=flist,
                                             indir=mne_save_dir,
                                             outdir=mne_save_dir,
@@ -43,7 +43,7 @@ saved_epoch_list = red_epoch.epoch_multiple(flist=flist,
                                             backup_trigchan=backup_trigchan,
                                             times=[-0.2, 0.8],
                                             overwrite=False,
-                                            njobs=8)
+                                            njobs=1)
 
 #%% EVOKED
 # compute evoked files from epoch list
@@ -73,7 +73,7 @@ saved_evoked_list = red_epoch.evoked_multiple(flist=flist,
                                               contlist=contlist,
                                               contlist2=contlist2,
                                               overwrite=False,
-                                              njobs=1)
+                                              njobs=8)
 
 #%% FREESURFER RECON
 subnames_only = list(set([x.split('_')[0] for x in flist])) # get a unique list of IDs
@@ -86,3 +86,16 @@ fs_recon_list = red_sourcespace.recon_all_multiple(sublist=subnames_only,
                                                    njobs=1,
                                                    cbu_clust=True,
                                                    cshrc_path='/home/ai05/.cshrc')
+
+#%% make BEM model
+# get all participants who have a fs_dir
+fs_dir_all = os.listdir(fs_sub_dir)
+fs_dir_subs = [f for f in fs_dir_all if f in subnames_only]
+# run run
+fs_recon_list = red_sourcespace.fs_bem_multiple(sublist=fs_dir_subs,
+                                                fs_sub_dir=fs_sub_dir,
+                                                fs_script_dir='/imaging/ai05/phono_oddball/fs_scripts',
+                                                fs_call='freesurfer_6.0.0',
+                                                njobs=1,
+                                                cbu_clust=True,
+                                                cshrc_path='/home/ai05/.cshrc')

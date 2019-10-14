@@ -208,6 +208,12 @@ def __evoked_individual(file, outdir, keys, contlist, contlist2, overwrite):
     f_only = os.path.basename(file).split('_')  # get filename parts seperated by _
     num = f_only[0]
 
+    if not os.path.isfile(file): # not a file
+        print(file + ' is not a file')
+        save_file_path = file
+        return save_file_path
+
+
     # check if output file(s) exist, if not overwrite then skip and return path
     # TODO: this will only check for main average file, might be some situations we want to check all
     if os.path.isfile(f'{outdir}/{num}_{f_only[2]}_ave.fif'):
@@ -219,7 +225,13 @@ def __evoked_individual(file, outdir, keys, contlist, contlist2, overwrite):
     # this will be a list of fnames
     saved_file_path = []
     # read in the evoked file
-    epochs = mne.read_epochs(file)
+    try:
+        epochs = mne.read_epochs(file)
+    except TypeError:
+        print('failed to read ' + file)
+        saved_file_path = ''
+        return saved_file_path
+
     evoked = epochs.average()
     ev_file_path = f'{outdir}/{num}_{f_only[2]}_ave.fif'
     evoked.save(ev_file_path) # save main average

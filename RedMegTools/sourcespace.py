@@ -114,14 +114,11 @@ def __recon_all_qstat(sub, struct_dir, fs_sub_dir, fs_script_dir):
     this_sub_dir = f'{fs_sub_dir}/{sub}'
     return this_sub_dir
 
-def fs_bem_multiple(sublist, struct_dir, fs_sub_dir, fs_script_dir,fs_call, njobs, cbu_clust, cshrc_path):
+def fs_bem_multiple(sublist, fs_sub_dir, fs_script_dir,fs_call, njobs, cbu_clust, cshrc_path):
 
     """
     :param sublist:
         A list of subjects for source recon
-    :param struct_dir:
-        A directory containing MRI scans with name format:
-        subname + T1w.nii.gz
     :param fs_sub_dir:
         The Freesurfer subject directory
     :param fs_call:
@@ -158,7 +155,7 @@ def fs_bem_multiple(sublist, struct_dir, fs_sub_dir, fs_script_dir,fs_call, njob
         if njobs > 1:
 
             saved_files = joblib.Parallel(n_jobs=njobs)(
-                joblib.delayed(__fs_bem_individual)(os.path.join(thisS, fs_sub_dir)) for thisS in sublist)
+                joblib.delayed(__fs_bem_individual)(thisS, fs_sub_dir) for thisS in sublist)
 
         return saved_files
 
@@ -184,7 +181,7 @@ def __fs_bem_individual(sub, fs_sub_dir):
         The directory where freesurfer is storring it's recon files
     """
 
-    if os.path.isfile(fs_sub_dir + '/' + sub):
+    if os.path.isdir(fs_sub_dir + '/' + sub):
         os.system(f"tcsh -c 'freesurfer_6.0.0 && setenv SUBJECTS_DIR && mne watershed_bem -s {sub} -d {fs_sub_dir}")
     else:
         print('no folder in fs subdir for ' + sub)
@@ -216,7 +213,7 @@ def __fs_bem_qstat(sub, fs_sub_dir, fs_script_dir):
         c_file.write(qsub_com)
 
     # construct the qsub command and execute
-    os.system(f'sbatch --job-name=reco_{sub} --mincpus=8 -t 2-1:10 {fs_script_dir}/{sub}_bem.csh')
+    os.system(f'sbatch --job-name=reco_{sub} --mincpus=1 -t 0-1:00 {fs_script_dir}/{sub}_bem.csh')
 
     # submit
     this_sub_dir = f'{fs_sub_dir}/{sub}'
