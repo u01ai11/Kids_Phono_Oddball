@@ -3,7 +3,7 @@ import os
 import numpy as np
 import joblib
 
-def epoch_multiple(flist, indir, outdir, keys, trigchan, times, overwrite, njobs):
+def epoch_multiple(flist, indir, outdir, keys, trigchan, backup_trigchan,times, overwrite, njobs):
     """ Epochs a list of files using the passed in arguments.
     Parameters
     ----------
@@ -17,6 +17,8 @@ def epoch_multiple(flist, indir, outdir, keys, trigchan, times, overwrite, njobs
         dictionary pairs of labels and trigger numbers for events
     :param trigchan:
         the channel to look for trigger from
+    :param backup_trigchan:
+        if no events found, the second channel to look for events in
     :param times:
         list of two times to index from
     :param overwrite:
@@ -39,16 +41,16 @@ def epoch_multiple(flist, indir, outdir, keys, trigchan, times, overwrite, njobs
 
     if njobs == 1:
         for i in range(len(flist)):
-            savedfile = __epoch_individual(os.path.join(indir, flist[i]), outdir, keys, trigchan, times, overwrite)
+            savedfile = __epoch_individual(os.path.join(indir, flist[i]), outdir, keys, trigchan, backup_trigchan, times, overwrite)
             saved_files.append(savedfile)
     if njobs > 1:
 
         saved_files = joblib.Parallel(n_jobs =njobs)(
-            joblib.delayed(__epoch_individual)(os.path.join(indir, thisF), outdir, keys, trigchan, times, overwrite) for thisF in flist)
+            joblib.delayed(__epoch_individual)(os.path.join(indir, thisF), outdir, keys, trigchan, backup_trigchan, times, overwrite) for thisF in flist)
 
     return saved_files
 
-def __epoch_individual(file, outdir, keys, trigchan , times ,overwrite):
+def __epoch_individual(file, outdir, keys, trigchan , backup_trigchan, times ,overwrite):
     """ Internal function to make epochs from raw files
     :param file:
         input file along with path
@@ -66,9 +68,14 @@ def __epoch_individual(file, outdir, keys, trigchan , times ,overwrite):
         truee or false. whether to overwrite the files if already exist
 
     """
-    raw = mne.io.read_raw_fif(file, preload=True)
+
     f_only = os.path.basename(file).split('_')  # get filename parts seperated by _
     num = f_only[0]
+
+    if not os.path.isfile(file): # not a file
+        print(file + ' is not a file')
+        save_file_path = file
+        return save_file_path
 
     # check if file exists, if not overwrite then skip and return path
     # TODO: write this so it partial matches and looks for _noecg and _noeog flags in raw data
@@ -78,11 +85,17 @@ def __epoch_individual(file, outdir, keys, trigchan , times ,overwrite):
             save_file_path = f'{outdir}/{num}_{f_only[1]}_epo.fif'
             return save_file_path
 
+    raw = mne.io.read_raw_fif(file, preload=True)
+
     try:
-        events = mne.find_events(raw)  # find events
+        events = mne.find_events(raw, shortest_event=1)  # find events
     except ValueError:
         print(f'{num} looks like there is a couple of short events filter them')
         events = mne.find_events(raw, min_duration=1.1/raw.info['sfreq'])
+
+    if len(events) < 5:
+        events = mne.find_events(raw, stim_channel=backup_trigchan, shortest_event=1)
+        trigchan = backup_trigchan # reassign trig chan
 
 
 

@@ -156,6 +156,7 @@ mne.write_bem_solution(f'{source_dir}/{fs_sub}-5120-5120-5120-bem-sol.fif', bem_
 # mne.viz.plot_bem(subject=fs_sub, subjects_dir=fs_sub_dir, brain_surfaces='white', src=src_space, orientation='coronal')
 # bem_sol = mne.read_bem_solution(f'{source_dir}/{fs_sub}-5120-5120-5120-bem-sol.fif') # if needed
 
+#%%
 # Co-registration # TODO: We cannot currently do this over remote ssh, make a loop for all participants
 mne.gui.coregistration(inst=f'{mne_save_dir}/{num}_{f_only[2]}_epo.fif', subject=fs_sub, subjects_dir=fs_sub_dir)
 trans = f'{mne_save_dir}/{num}_{f_only[2]}_coreg-trans.fif'
