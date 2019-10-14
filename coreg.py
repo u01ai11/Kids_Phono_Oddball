@@ -25,8 +25,8 @@ fs_dir_subs = [f for f in fs_dir_all if f in subnames_only]
 for file in flist:
     f_only = os.path.basename(file).split('_')  # get filename parts seperated by _
     num = f_only[0]
-
+    full_f = os.path.join(rawdir, file)
     if num in fs_dir_subs: # if participant has source-recon
-        mne.gui.coregistration(inst=file, subject=num, subjects_dir=fs_sub_dir)
+        mne.gui.coregistration(inst=full_f, subject=num, subjects_dir=fs_sub_dir, advanced_rendering=False)
     else:
-        mne.gui.coregistration(inst=file, subjects_dir=fs_sub_dir)
+        mne.gui.coregistration(inst=full_f, subjects_dir=fs_sub_dir,advanced_rendering=False)
