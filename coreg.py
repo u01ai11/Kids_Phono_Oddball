@@ -22,11 +22,24 @@ subnames_only = list(set([x.split('_')[0] for x in flist])) # get a unique list 
 fs_dir_all = os.listdir(fs_sub_dir)
 fs_dir_subs = [f for f in fs_dir_all if f in subnames_only]
 
+#sigh, we have to do this because of poor openGL on cluster nodes
+os.system("tcsh -c 'setenv MESA_GL_VERSION_OVERRIDE 3.3'")
+
+coreglist = []
+
 for file in flist:
     f_only = os.path.basename(file).split('_')  # get filename parts seperated by _
     num = f_only[0]
     full_f = os.path.join(rawdir, file)
-    if num in fs_dir_subs: # if participant has source-recon
+
+    #check if coreg already exists
+    if os.path.isfile(os.path.join(source_dir, f'{num}_scaled-trans.fif')):
+        print('num already coregistered')
+        coreglist.append(f'{num}_scaled-trans.fif')
+        pass #skip this one
+
+    if num in fs_dir_all: # if participant has source-recon
         mne.gui.coregistration(inst=full_f, subject=num, subjects_dir=fs_sub_dir, advanced_rendering=False)
     else:
         mne.gui.coregistration(inst=full_f, subjects_dir=fs_sub_dir,advanced_rendering=False)
+    coreglist.append(f'{num}_scaled-trans.fif')
