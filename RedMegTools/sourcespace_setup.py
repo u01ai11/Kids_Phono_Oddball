@@ -56,10 +56,49 @@ def __setup_src_individual(sub, fs_sub_dir, outdir, spacing, surface, njobs):
         how many jons to split this up into
     :return:
     """
-    src_space = mne.setup_source_space(sub, spacing=spacing, surface=surface, subjects_dir=fs_sub_dir, n_jobs=njobs)
-    fname = outdir + '/' + sub + '_'+surface+'-'+spacing+'-src.fif'
-    mne.write_source_spaces(fname, src_space)  # write to source dir
-    this_sub_dir = fname
+
+    try:
+        src_space = mne.setup_source_space(sub, spacing=spacing, surface=surface, subjects_dir=fs_sub_dir, n_jobs=njobs)
+        fname = outdir + '/' + sub + '_'+surface+'-'+spacing+'-src.fif'
+        mne.write_source_spaces(fname, src_space)  # write to source dir
+        this_sub_dir = fname
+    except OSError:
+        print('something went wrong with setup, skipping ' + sub)
+        return ''
+
     return this_sub_dir
+
+def make_bem_multiple(sublist, fs_sub_dir, outdir, single_layers):
+    """
+    :param sublist:
+    :param fs_sub_dir:
+    :param single_layers:
+    :return:
+    """
+
+
+
+def __make_bem_individual(sub, fs_sub_dir, outdir, single_layers):
+    """
+
+    :param sub:
+    :param fs_sub_dir:
+    :param single_layers:
+    :return:
+    """
+
+    #  make model
+    try:
+        model = mne.make_bem_model(sub, subjects_dir=fs_sub_dir)
+    except:
+        print('failed to make BEM model with input')
+        if single_layers:
+            print('falling back to single layer model due to BEM suckiness')
+            model = mne.make_bem_model(sub, subjects_dir=fs_sub_dir, conductivity=[0.3])
+        else:
+            print('wont allow single layer model so skipping')
+            return ''
+
+    # save model
 
 

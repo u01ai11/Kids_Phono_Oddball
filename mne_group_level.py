@@ -94,6 +94,8 @@ fs_recon_list = red_sourcespace_cmd.recon_all_multiple(sublist=subnames_only,
 #%% make BEM model
 # get all participants who have a fs_dir
 fs_dir_all = os.listdir(fs_sub_dir)
+
+#use only scales or avscaled fnames
 fs_dir_subs = [f for f in fs_dir_all if f in subnames_only]
 # run run run run
 fs_recon_list = red_sourcespace_cmd.fs_bem_multiple(sublist=fs_dir_subs,
@@ -106,7 +108,12 @@ fs_recon_list = red_sourcespace_cmd.fs_bem_multiple(sublist=fs_dir_subs,
 
 #%% setup sourcespace in MNE format
 mne_src_dir = '/imaging/ai05/phono_oddball/mne_source_models'
-mne_src_files = red_sourcespace_setup.setup_src_multiple(sublist=fs_dir_subs,
+
+# select only the scaled and coregister versions
+#  use only scales or avscaled fnames
+fs_scaled = [f for f in fs_dir_all if 'scaled' in f]
+
+mne_src_files = red_sourcespace_setup.setup_src_multiple(sublist=fs_scaled,
                                                          fs_sub_dir=fs_sub_dir,
                                                          outdir=mne_src_dir,
                                                          spacing='oct6',
