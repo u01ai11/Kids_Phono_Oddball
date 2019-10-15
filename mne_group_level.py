@@ -111,6 +111,6 @@ mne_src_files = red_sourcespace_setup.setup_src_multiple(sublist=fs_dir_subs,
                                                          outdir=mne_src_dir,
                                                          spacing='oct6',
                                                          surface='white',
-                                                         n_jobs1=8,
+                                                         n_jobs1=16,
                                                          n_jobs2=1)
 #%%

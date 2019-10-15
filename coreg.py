@@ -28,18 +28,24 @@ os.system("tcsh -c 'setenv MESA_GL_VERSION_OVERRIDE 3.3'")
 coreglist = []
 
 for file in flist:
-    f_only = os.path.basename(file).split('_')  # get filename parts seperated by _
+    f_only = os.path.basename(file).split('_')  # get filename parts seperated bscy _
     num = f_only[0]
     full_f = os.path.join(rawdir, file)
-
     #check if coreg already exists
     if os.path.isfile(os.path.join(source_dir, f'{num}_scaled-trans.fif')):
         print('num already coregistered')
         coreglist.append(f'{num}_scaled-trans.fif')
-        pass #skip this one
-
+        continue  # skip this one
+    if os.path.isfile(os.path.join(source_dir, f'{num}_avscaled-trans.fif')):
+        print('num already coregistered')
+        coreglist.append(f'{num}_avscaled-trans.fif')
+        continue  # skip this one
     if num in fs_dir_all: # if participant has source-recon
-        mne.gui.coregistration(inst=full_f, subject=num, subjects_dir=fs_sub_dir, advanced_rendering=False)
+        try:
+            mne.gui.coregistration(inst=full_f, subject=num, subjects_dir=fs_sub_dir, advanced_rendering=False)
+        except ValueError:
+            print('No MRI found in FSDIR')
+            mne.gui.coregistration(inst=full_f, subjects_dir=fs_sub_dir, advanced_rendering=False)
     else:
         mne.gui.coregistration(inst=full_f, subjects_dir=fs_sub_dir,advanced_rendering=False)
     coreglist.append(f'{num}_scaled-trans.fif')

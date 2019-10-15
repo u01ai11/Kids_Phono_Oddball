@@ -31,7 +31,7 @@ def recon_all_multiple(sublist, struct_dir, fs_sub_dir, fs_script_dir,fs_call, n
         # set up
         # TODO: make bash version, this will only work on tcsh terminal
         # check if dir exists, make if not
-        if os.p ath.isdir(fs_sub_dir):
+        if os.path.isdir(fs_sub_dir):
             os.system(f"tcsh -c '{fs_call} && setenv SUBJECTS_DIR {fs_sub_dir}'")
         else:
             os.system(f"tcsh -c '{fs_call} && mkdir {fs_sub_dir} && setenv SUBJECTS_DIR {fs_sub_dir}'")
