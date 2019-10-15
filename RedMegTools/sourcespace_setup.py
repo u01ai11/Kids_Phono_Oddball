@@ -56,10 +56,14 @@ def __setup_src_individual(sub, fs_sub_dir, outdir, spacing, surface, njobs):
         how many jons to split this up into
     :return:
     """
-
+    # check if already exists.
+    fname = outdir + '/' + sub + '_' + surface + '-' + spacing + '-src.fif'
+    if os.path.isfile(fname):
+        print(fname + ' already exists')
+        return fname
     try:
         src_space = mne.setup_source_space(sub, spacing=spacing, surface=surface, subjects_dir=fs_sub_dir, n_jobs=njobs)
-        fname = outdir + '/' + sub + '_'+surface+'-'+spacing+'-src.fif'
+
         mne.write_source_spaces(fname, src_space)  # write to source dir
         this_sub_dir = fname
     except OSError:
