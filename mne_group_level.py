@@ -120,4 +120,10 @@ mne_src_files = red_sourcespace_setup.setup_src_multiple(sublist=fs_scaled,
                                                          surface='white',
                                                          n_jobs1=16,
                                                          n_jobs2=1)
-#%%
+#%% BEM MNE input stuff
+
+mne_bem_files = red_sourcespace_setup.make_bem_multiple(sublist=fs_scaled,
+                                                        fs_sub_dir=fs_sub_dir,
+                                                        outdir=mne_src_dir,
+                                                        single_layers=True,
+                                                        n_jobs1=8)

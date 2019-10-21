@@ -72,14 +72,39 @@ def __setup_src_individual(sub, fs_sub_dir, outdir, spacing, surface, njobs):
 
     return this_sub_dir
 
-def make_bem_multiple(sublist, fs_sub_dir, outdir, single_layers):
+def make_bem_multiple(sublist, fs_sub_dir, outdir, single_layers, n_jobs1):
+
     """
     :param sublist:
+        Subjects in the freesurfer subjectdir to use
     :param fs_sub_dir:
+        Freesurfer subject dir
+    :param outdir:
+        Where the models are being saved
     :param single_layers:
+        Boolean weather to allow single layer models or not
+    :param n_jobs1:
+        First parallel command, sets the number of joblib jobs to do on group level.
+
     :return:
     """
 
+    # set up
+
+    # check if dir exists, make if not
+
+    saved_files = []
+
+    if n_jobs1 == 1:
+        for i in range(len(sublist)):
+            savedfile = __make_bem_individual(sublist[i], fs_sub_dir, outdir, single_layers)
+            saved_files.append(savedfile)
+    if n_jobs1 > 1:
+
+        saved_files = joblib.Parallel(n_jobs=n_jobs1)(
+            joblib.delayed(__make_bem_individual)(thisS, fs_sub_dir, outdir, single_layers) for thisS in sublist)
+
+    return saved_files
 
 
 def __make_bem_individual(sub, fs_sub_dir, outdir, single_layers):
@@ -92,17 +117,28 @@ def __make_bem_individual(sub, fs_sub_dir, outdir, single_layers):
     """
 
     #  make model
+
+
     try:
         model = mne.make_bem_model(sub, subjects_dir=fs_sub_dir)
+        bemname = f'{outdir}/{sub}-5120-5120-5120-bem.fif'
+        solname = f'{outdir}/{sub}-5120-5120-5120-bem-sol.fif'
     except:
         print('failed to make BEM model with input')
         if single_layers:
-            print('falling back to single layer model due to BEM suckiness')
-            model = mne.make_bem_model(sub, subjects_dir=fs_sub_dir, conductivity=[0.3])
+            try:
+                print('falling back to single layer model due to BEM suckiness')
+                model = mne.make_bem_model(sub, subjects_dir=fs_sub_dir, conductivity=[0.3])
+                bemname = f'{outdir}/{sub}-5120-5120-5120-single-bem.fif'
+                solname = f'{outdir}/{sub}-5120-5120-5120-single-bem-sol.fif'
+            except:
+                print(f'oops that also failed for {sub}')
+
         else:
             print('wont allow single layer model so skipping')
             return ''
 
     # save model
-
-
+    mne.write_bem_surfaces(bemname, model)  # save to source dir
+    bem_sol = mne.make_bem_solution(model)  # make bem solution using model
+    mne.write_bem_solution(solname, bem_sol) # save as well to the outdir
