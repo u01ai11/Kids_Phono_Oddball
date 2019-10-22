@@ -3,6 +3,7 @@ import RedMegTools.epoch as red_epoch
 import RedMegTools.preprocess as red_preprocess
 import RedMegTools.sourcespace_command_line as red_sourcespace_cmd
 import RedMegTools.sourcespace_setup as red_sourcespace_setup
+import RedMegTools.utils as red_utils
 import os
 import collections
 
@@ -12,7 +13,7 @@ mne_save_dir = '/imaging/ai05/phono_oddball/mne_files'  # where to save MNE MEG 
 source_dir = '/imaging/ai05/phono_oddball/mne_source_models'  # where to save MNE source recon files
 struct_dir = '/imaging/ai05/phono_oddball/structurals_renamed'  # where our structs are
 fs_sub_dir = '/imaging/ai05/phono_oddball/fs_subdir'  # fresurfer subject dir
-
+mne_src_dir = '/imaging/ai05/phono_oddball/mne_source_models'
 flist = [f for f in os.listdir(rawdir) if os.path.isfile(os.path.join(rawdir, f))]
 subnames_only = list(set([x.split('_')[0] for x in flist])) # get a unique list of IDs
 
@@ -119,12 +120,24 @@ mne_src_files = red_sourcespace_setup.setup_src_multiple(sublist=fs_scaled,
                                                          outdir=mne_src_dir,
                                                          spacing='oct6',
                                                          surface='white',
-                                                         n_jobs1=16,
+                                                         n_jobs1=19,
                                                          n_jobs2=1)
 #%% BEM MNE input stuff
-
 mne_bem_files = red_sourcespace_setup.make_bem_multiple(sublist=fs_scaled,
                                                         fs_sub_dir=fs_sub_dir,
                                                         outdir=mne_src_dir,
                                                         single_layers=True,
-                                                        n_jobs1=32)
+                                                        n_jobs1=20)
+
+#%% choose participants with existing bem models
+# this gives us lists of files for each participant
+checklist = red_utils.check_ids(rawdir, fs_sub_dir, mne_src_dir)
+# this gets just there filenames and ids
+bem_fs = [i for i in checklist[3] if i != '']  # strip out the empties
+bem_nos = [i[0].split('-')[0] for i in bem_fs]  # get their ids
+
+# now we need to find the corresponding raw files, trans, sourcespace and bemsols
+
+
+
+#%% get a forward solution for them

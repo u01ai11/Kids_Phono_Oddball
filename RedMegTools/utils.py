@@ -44,5 +44,41 @@ def check_ids(rawdir, fsdir, mnedir):
             fs_match.append('')
 
         # check for trans
+        matching = [s for s in mnelist if sub in s]
+        if len(matching) > 0: # if there are any
+            matching2 = [s for s in matching if 'trans.fif' in s]
+            if len(matching2) > 0:
+                trans_match.append(matching2)
+            else:
+                trans_match.append('')
+        else:
+            trans_match.append('')
 
+        # check for BEM model
+        matching = [s for s in mnelist if sub in s]
+        if len(matching) > 0: # if there are any
+            matching2 = [s for s in matching if 'bem.fif' in s]
+            if len(matching2) > 0:
+                bemm_match.append(matching2)
+            else:
+                bemm_match.append('')
+        else:
+            bemm_match.append('')
+
+
+        # check for BEM solution
+        matching = [s for s in mnelist if sub in s]
+        if len(matching) > 0: # if there are any
+            matching2 = [s for s in matching if 'bem-sol.fif' in s]
+            if len(matching2) > 0:
+                bems_match.append(matching2)
+            else:
+                bems_match.append('')
+        else:
+            bems_match.append('')
+
+    return [fs_match,
+            trans_match,
+            bemm_match,
+            bems_match]
 
