@@ -116,29 +116,43 @@ def __make_bem_individual(sub, fs_sub_dir, outdir, single_layers):
     :return:
     """
 
-    #  make model
-
-
-    try:
-        model = mne.make_bem_model(sub, subjects_dir=fs_sub_dir)
-        bemname = f'{outdir}/{sub}-5120-5120-5120-bem.fif'
+    #  see if file exists and skip if so
+    if os.path.isfile(f'{outdir}/{sub}-5120-5120-5120-bem.fif'):
+        print(f'{sub} has full file skipping')
+        model = mne.read_bem_surfaces(f'{outdir}/{sub}-5120-5120-5120-bem.fif')
         solname = f'{outdir}/{sub}-5120-5120-5120-bem-sol.fif'
-    except:
-        print('failed to make BEM model with input')
+    # if single layers is true check for this, if not we want to try full model
+    elif os.path.isfile(f'{outdir}/{sub}-5120-5120-5120-single-bem.fif'):
         if single_layers:
-            try:
-                print('falling back to single layer model due to BEM suckiness')
-                model = mne.make_bem_model(sub, subjects_dir=fs_sub_dir, conductivity=[0.3])
-                bemname = f'{outdir}/{sub}-5120-5120-5120-single-bem.fif'
-                solname = f'{outdir}/{sub}-5120-5120-5120-single-bem-sol.fif'
-            except:
-                print(f'oops that also failed for {sub}')
+            print(f'{sub} has single layer file skipping')
+            model = mne.read_bem_surfaces(f'{outdir}/{sub}-5120-5120-5120-single-bem.fif')
+            solname = f'{outdir}/{sub}-5120-5120-5120-single-bem-sol.fif'
+    else:
 
-        else:
-            print('wont allow single layer model so skipping')
-            return ''
+    #  make model
+        try:
+            model = mne.make_bem_model(sub, subjects_dir=fs_sub_dir)
+            bemname = f'{outdir}/{sub}-5120-5120-5120-bem.fif'
+            solname = f'{outdir}/{sub}-5120-5120-5120-bem-sol.fif'
+        except:
+            print('failed to make BEM model with input')
+            if single_layers:
+                try:
+                    print('falling back to single layer model due to BEM suckiness')
+                    model = mne.make_bem_model(sub, subjects_dir=fs_sub_dir, conductivity=[0.3])
+                    bemname = f'{outdir}/{sub}-5120-5120-5120-single-bem.fif'
+                    solname = f'{outdir}/{sub}-5120-5120-5120-single-bem-sol.fif'
+                except:
+                    print(f'oops that also failed for {sub}')
+                    return ''
 
-    # save model
-    mne.write_bem_surfaces(bemname, model)  # save to source dir
+            else:
+                print('wont allow single layer model so skipping')
+                return ''
+
+        # save model
+        mne.write_bem_surfaces(bemname, model)  # save to source dir
+
     bem_sol = mne.make_bem_solution(model)  # make bem solution using model
     mne.write_bem_solution(solname, bem_sol) # save as well to the outdir
+    return solname

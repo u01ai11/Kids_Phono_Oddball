@@ -23,7 +23,7 @@ os.sched_setaffinity(0, {0,1,2,3,4,5,6,7,8})
 
 # make a list of files for pre-processing
 flist = [f for f in os.listdir(rawdir) if os.path.isfile(os.path.join(rawdir, f))]
-
+#%%
 # preprocess those files
 saved_list = red_preprocess.preprocess_multiple(flist=flist,
                                                 indir=rawdir,
@@ -96,7 +96,8 @@ fs_recon_list = red_sourcespace_cmd.recon_all_multiple(sublist=subnames_only,
 fs_dir_all = os.listdir(fs_sub_dir)
 
 #use only scales or avscaled fnames
-fs_dir_subs = [f for f in fs_dir_all if f in subnames_only]
+fs_dir_subs = [f for f in fs_dir_all if f not in subnames_only]
+
 # run run run run
 fs_recon_list = red_sourcespace_cmd.fs_bem_multiple(sublist=fs_dir_subs,
                                                 fs_sub_dir=fs_sub_dir,
@@ -126,4 +127,4 @@ mne_bem_files = red_sourcespace_setup.make_bem_multiple(sublist=fs_scaled,
                                                         fs_sub_dir=fs_sub_dir,
                                                         outdir=mne_src_dir,
                                                         single_layers=True,
-                                                        n_jobs1=8)
+                                                        n_jobs1=32)
