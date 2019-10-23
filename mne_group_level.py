@@ -4,6 +4,7 @@ import RedMegTools.preprocess as red_preprocess
 import RedMegTools.sourcespace_command_line as red_sourcespace_cmd
 import RedMegTools.sourcespace_setup as red_sourcespace_setup
 import RedMegTools.utils as red_utils
+import RedMegTools.inversion as red_inv
 import os
 import collections
 
@@ -137,7 +138,16 @@ bem_fs = [i for i in checklist[3] if i != '']  # strip out the empties
 bem_nos = [i[0].split('-')[0] for i in bem_fs]  # get their ids
 
 # now we need to find the corresponding raw files, trans, sourcespace and bemsols
+megfs, transfs, srcfs, bemfs = red_utils.find_fwd_files(bem_nos, mne_src_dir, rawdir)
 
-
+# exclude any participants with an empty
+ind = 0
+for mgf, trf, srf, bmf, in zip(megfs, transfs, srcfs, bemfs):
+    if any(item == '' for item in  [mgf, trf, srf, bmf]):
+        del megfs[ind], transfs[ind], srcfs[ind], bemfs[ind]
+    ind = ind+1
 
 #%% get a forward solution for them
+mne_fwd_files = red_inv.fwd_solution_multiple(megfs, transfs, srcfs, bemfs, rawdir, mne_src_dir, mne_src_dir, n_jobs=16)
+
+# compute covariance matrix

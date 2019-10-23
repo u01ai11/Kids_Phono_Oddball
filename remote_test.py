@@ -167,7 +167,7 @@ mne.write_forward_solution(f'{source_dir}/{fs_sub}_{f_only[2]}-fwd.fif', fwd) #s
 # fwd = mne.read_forward_solution(f'{source_dir}/{fs_sub}_{f_only[2]}-fwd.fif') # if needed
 
 # compute covariance matrix on epochs
-cov = mne.compute_covariance(epochs, method=['shrunk', 'empirical'], rank=None) # this is quicker still takes a while
+cov = mne.compute_covariance(epochs, method='empirical', tmax=0.) # this is quicker still takes a while
 mne.write_cov(f'{source_dir}/{fs_sub}_{f_only[2]}-cov.fif', cov) # save this file
 # cov = mne.read_cov(f'{source_dir}/{fs_sub}_{f_only[2]}-cov.fif') # if needed
 
@@ -177,7 +177,7 @@ inv = mne.minimum_norm.make_inverse_operator(raw.info, fwd, cov, loose=0.2, dept
 #%% compute inverse solultion
 
 # MNE
-stc_mne = mne.minimum_norm.apply_inverse(evoked, inv, lambda2=1. / 9.)
+stc_mne = mne.minimum_norm.apply_inverse(evoked[0], inv, lambda2=1. / 9.)
 
 # plot
 stc_mne.plot(subjects_dir=fs_sub_dir, backend='matplotlib', hemi='lh', initial_time=.3)
