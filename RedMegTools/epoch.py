@@ -233,7 +233,7 @@ def __evoked_individual(file, outdir, keys, contlist, contlist2, overwrite):
         return saved_file_path
 
     evoked = epochs.average()
-    ev_file_path = f'{outdir}/{num}_{f_only[2]}_ave.fif'
+    ev_file_path = f'{outdir}/{num}_{f_only[1]}_ave.fif'
     evoked.save(ev_file_path) # save main average
     saved_file_path.append(ev_file_path) # append to list to store
 
@@ -282,7 +282,7 @@ def __evoked_individual(file, outdir, keys, contlist, contlist2, overwrite):
 
     # loop through contrasts to save them with file names
     for i in range(len(evoked_cs)):
-        tosave = f'{outdir}/{num}_{f_only[2]}_{conts[i][0]}_ave.fif'
+        tosave = f'{outdir}/{num}_{f_only[1]}_{conts[i][0]}_ave.fif'
         evoked_cs[i].save(tosave)
         saved_file_path.append(tosave)
 

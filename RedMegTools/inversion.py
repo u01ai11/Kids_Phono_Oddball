@@ -1,8 +1,9 @@
 import mne
 import os
+from os.path import dirname
 import numpy as np
 import joblib
-
+import inspect
 
 def fwd_solution_multiple(raw_list, trans_list, src_list, bems_list, rawdir, mnedir,outdir, n_jobs):
     """
@@ -72,19 +73,113 @@ def __fwd_individual(raw, trans, src, bemsol, outdir):
     return f'{outdir}/{num}-fwd.fif'
 
 
-def cov_matrix_multiple(epochlist, method, rank, outdir, njobs):
+def cov_matrix_multiple_cluster(epochlist, method, rank, tmax, outdir, pythonpath, scriptpath):
+    """
+    Same as below but uses the cluster to submit individual jobs
 
+    :param epochlist:
+        list of epoched file to calculate covariance matrix from
+    :param method:
+        method to use on calculating, see MNE documentation for options
+    :param rank:
+        rank for MNE covariance function
+    :param tmax:
+        the time which we want to use from each epoch to go up to
+    :param outdir:
+        where are we saving
+    :param pythonpath
+        path to your python excecutable
+    :param scriptpath
+        path where you want to save cluster scripts
+    :param njobs:
+        how parallel we need to go
+    :return:
+    """
+
+    # get covariance matrix function as a string
+    cvfunstr = inspect.getsource(__cov_matrix_individual)
+    # get path of this library
+    parent_path = dirname(dirname(os.path.abspath(__file__)))
+    # loop through files
+    for i in range(len(epochlist)):
+        # construct python file for this subject
+        command = f"""
+import mne
+import os
+import numpy as np
+import joblib
+import inspect
+import sys
+sys.path.insert(0, '{parent_path}')
+{cvfunstr}
+__cov_matrix_individual('{epochlist[i]}', '{method}', {rank}, {tmax}, '{outdir}')
+        """
+        # save to file
+        print(command, file=open(f'{scriptpath}/batch_{i}.py', 'w'))
+
+        # construct csh file
+        tcshf = f"""#!/bin/tcsh
+{pythonpath} {scriptpath}/batch_{i}.py
+        """
+        # save to directory
+        print(tcshf, file=open(f'{scriptpath}/batch_{i}.csh', 'w'))
+
+        # execute this on the cluster
+        os.system(f'sbatch --job-name=covmat_{i} --mincpus=5 -t 0-1:00 {scriptpath}/batch_{i}.csh')
+
+
+
+def cov_matrix_multiple(epochlist, method, rank, tmax, outdir, njobs):
+    """
+
+    :param epochlist:
+        list of epoched file to calculate covariance matrix from
+    :param method:
+        method to use on calculating, see MNE documentation for options
+    :param rank:
+        rank for MNE covariance function
+    :param tmax:
+        the time which we want to use from each epoch to go up to
+    :param outdir:
+        where are we saving
+    :param njobs:
+        how parallel we need to go
+    :return:
+    """
     # set up
     saved_files = []
 
-    if n_jobs == 1:
+    if njobs == 1:
         for i in range(len(epochlist)):
-            savedfile = __fwd_individual(rawdir+'/'+raw_list[i], mnedir+'/'+trans_list[i], mnedir+'/'+src_list[i], mnedir+'/'+bems_list[i], outdir)
+            savedfile = __cov_matrix_individual(epochlist[i], method, rank, tmax, outdir)
             saved_files.append(savedfile)
-    if n_jobs > 1:
-        saved_files = joblib.Parallel(n_jobs =n_jobs)(
-            joblib.delayed(__fwd_individual)(rawdir+'/'+R, mnedir+'/'+T, mnedir+'/'+S, mnedir+'/'+B, outdir) for R,T,S,B in zip(raw_list, trans_list, src_list, bems_list))
+    if njobs > 1:
+        saved_files = joblib.Parallel(n_jobs =njobs)(
+            joblib.delayed(__cov_matrix_individual)(thisepoch, method, rank, tmax, outdir) for thisepoch in epochlist)
 
     return saved_files
 
-def __
+
+def __cov_matrix_individual(epochf, method, rank, tmax, outdir):
+    """
+    private function that uses the inputs listed in multiple function
+
+    :param epochf:
+    :param method:
+    :param rank:
+    :param tmax:
+    :param outdir:
+    :return:
+    """
+    nameonly = os.path.basename(epochf)
+    parts = nameonly.split('_')
+    outname = f'{outdir}/{parts[0]}_{parts[1]}-cov.fif'
+
+    if os.path.isfile(outname):
+        print(f'{outname} already exists skipping')
+        return outname
+
+    epochs = mne.read_epochs(epochf)
+    cov = mne.compute_covariance(epochs[0], rank=rank, method=method, tmax=tmax)
+    mne.write_cov(outname, cov)
+    return outname

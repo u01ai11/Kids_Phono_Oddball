@@ -31,7 +31,7 @@ saved_list = red_preprocess.preprocess_multiple(flist=flist,
                                                 indir=rawdir,
                                                 outdir=mne_save_dir,
                                                 overwrite=False,
-                                                njobs=8)
+                                                njobs=1)
 
 #%% EPOCHED
 # make a list of files for epoching from above
@@ -47,9 +47,9 @@ saved_epoch_list = red_epoch.epoch_multiple(flist=flist,
                                             keys=keys,
                                             trigchan=trigchan,
                                             backup_trigchan=backup_trigchan,
-                                            times=[-0.2, 0.8],
-                                            overwrite=False,
-                                            njobs=1)
+                                            times=[-0.3, 0.8],
+                                            overwrite=True,
+                                            njobs=32)
 
 #%% EVOKED
 # compute evoked files from epoch list
@@ -58,8 +58,8 @@ saved_epoch_list = red_epoch.epoch_multiple(flist=flist,
 # The sign refers to their weighting
 contlist = collections.OrderedDict({
     'MNN': [0, -1, -2],
-    'MNN Word': [0, -1],
-    'MNN Non-Word': [0, -2]
+    'MNN-Word': [0, -1],
+    'MNN-Non-Word': [0, -2]
 })
 
 # list of second level contrasts (i.e. combining the above simple contrasts)
@@ -79,7 +79,7 @@ saved_evoked_list = red_epoch.evoked_multiple(flist=flist,
                                               contlist=contlist,
                                               contlist2=contlist2,
                                               overwrite=False,
-                                              njobs=8)
+                                              njobs=32)
 
 #%% FREESURFER RECON
 subnames_only = list(set([x.split('_')[0] for x in flist])) # get a unique list of IDs
@@ -150,4 +150,18 @@ for mgf, trf, srf, bmf, in zip(megfs, transfs, srcfs, bemfs):
 #%% get a forward solution for them
 mne_fwd_files = red_inv.fwd_solution_multiple(megfs, transfs, srcfs, bemfs, rawdir, mne_src_dir, mne_src_dir, n_jobs=16)
 
-# compute covariance matrix
+#%% compute covariance matrix
+
+#get epoched files for this
+allepo = [f for f in os.listdir(mne_save_dir) if '_epo.fif' in f]
+# add file list
+allepo = [f'{mne_save_dir}/{f}' for f in allepo]
+
+cov_files = red_inv.cov_matrix_multiple_cluster(epochlist=allepo,
+                                                method='auto',
+                                                rank=None,
+                                                tmax=0,
+                                                outdir=mne_src_dir,
+                                                pythonpath='/home/ai05/anaconda3/envs/mne/bin/python',
+                                                scriptpath='/home/ai05/clusterscripts'
+                                                )
