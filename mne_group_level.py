@@ -1,4 +1,6 @@
 #%%
+import sys
+sys.path.insert(0, '/home/ai05/Kids_Phono_Oddball')
 import RedMegTools.epoch as red_epoch
 import RedMegTools.preprocess as red_preprocess
 import RedMegTools.sourcespace_command_line as red_sourcespace_cmd

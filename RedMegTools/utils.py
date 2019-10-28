@@ -181,12 +181,12 @@ def align_runs_max(raw_dir, max_com, outdir, scriptdir):
             print(f'no files for {num}')
         if len(numfiles) == 1:
             print(f'only one run for {num} just copy t outdir and skip')
-            os.system(f'cp {raw_dir}/{rawfiles[0]} {outdir}/{rawfiles[0]}')
+            os.system(f'cp {raw_dir}/{numfiles[0]} {outdir}/{numfiles[0]}')
         if len(numfiles) == 2:
             # construct csh file
             tcshf = f"""#!/bin/tcsh 
-{max_com} -f {raw_dir}/{rawfiles[1]} -o {outdir}/{rawfiles[1]} -trans {raw_dir}/{rawfiles[0]} -force
-cp {raw_dir}/{rawfiles[0]} {outdir}/{rawfiles[0]}
+{max_com} -f {raw_dir}/{numfiles[1]} -o {outdir}/{numfiles[1]} -trans {raw_dir}/{numfiles[0]} -force
+cp {raw_dir}/{numfiles[0]} {outdir}/{numfiles[0]}
 """
             # save to directory
             print(tcshf, file=open(f'{scriptdir}/batch_{num}.csh', 'w'))
