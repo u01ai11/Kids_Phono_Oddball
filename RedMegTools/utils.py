@@ -185,7 +185,7 @@ def align_runs_max(raw_dir, max_com, outdir, scriptdir):
         if len(numfiles) == 2:
             # construct csh file
             tcshf = f"""#!/bin/tcsh 
-{max_com} -f {raw_dir}/{rawfiles[1]} -o {outdir}/{rawfiles[1]} -trans {raw_dir}/{rawfiles[0]}
+{max_com} -f {raw_dir}/{rawfiles[1]} -o {outdir}/{rawfiles[1]} -trans {raw_dir}/{rawfiles[0]} -force
 cp {raw_dir}/{rawfiles[0]} {outdir}/{rawfiles[0]}
 """
             # save to directory
