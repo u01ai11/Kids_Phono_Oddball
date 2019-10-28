@@ -150,18 +150,34 @@ for mgf, trf, srf, bmf, in zip(megfs, transfs, srcfs, bemfs):
 #%% get a forward solution for them
 mne_fwd_files = red_inv.fwd_solution_multiple(megfs, transfs, srcfs, bemfs, rawdir, mne_src_dir, mne_src_dir, n_jobs=16)
 
-#%% compute covariance matrix
-
+#%% combine runs for each participant
 #get epoched files for this
 allepo = [f for f in os.listdir(mne_save_dir) if '_epo.fif' in f]
+eponum = set([f.split('_')[0] for f in allepo]) # parts
+
+
+
 # add file list
 allepo = [f'{mne_save_dir}/{f}' for f in allepo]
+#%% compute covariance matrix
 
+
+#%%
 cov_files = red_inv.cov_matrix_multiple_cluster(epochlist=allepo,
-                                                method='auto',
+                                                method='empirical',
                                                 rank=None,
                                                 tmax=0,
                                                 outdir=mne_src_dir,
                                                 pythonpath='/home/ai05/anaconda3/envs/mne/bin/python',
                                                 scriptpath='/home/ai05/clusterscripts'
                                                 )
+#%%
+cov_files = red_inv.cov_matrix_multiple(epochlist=allepo,
+                                        method='empirical',
+                                        rank=None,
+                                        tmax=0,
+                                        outdir=mne_src_dir,
+                                        njobs=16
+                                        )
+#%%
+

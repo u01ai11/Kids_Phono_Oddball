@@ -183,3 +183,48 @@ def __cov_matrix_individual(epochf, method, rank, tmax, outdir):
     cov = mne.compute_covariance(epochs[0], rank=rank, method=method, tmax=tmax)
     mne.write_cov(outname, cov)
     return outname
+
+
+def inv_op_multiple(infofs, fwdfs, covfs, loose, depth, outdir, njobs):
+    """
+    :param infofs:
+    :param fwdfs:
+    :param covfs:
+    :param loose:
+    :param depth:
+    :param outdir:
+    :param njobs:
+    :return:
+    """
+
+    saved_files = []
+
+    if njobs == 1:
+        for i in range(len(infofs)):
+            savedfile = __inv_op_individual(infofs[i], fwdfs[i], covfs[i], loose, depth, outdir)
+            saved_files.append(savedfile)
+    if njobs > 1:
+        saved_files = joblib.Parallel(n_jobs=njobs)(
+            joblib.delayed(__inv_op_individual)(i, f, c, loose, depth, outdir) for (i, f, c) in zip(infofs, fwdfs, covfs))
+
+    return saved_files
+
+
+def __inv_op_individual(infof, fwdf, covf, loose, depth, outdir):
+
+    parts = os.path.basename(infof).split('_')
+    num = parts[0]
+
+    fname = f'{outdir}/{parts[0]}_{parts[1]}-inv.fif'
+
+    if os.path.isfile(fname):
+        print(f'{fname} already exisits skipping')
+        return fname
+
+    info = mne.io.read_raw_fif(infof, preload=False)
+    fwd = mne.read_forward_solution(fwdf)
+    cov = mne.read_cov(covf)
+
+    inv = mne.minimum_norm.make_inverse_operator(info, fwd, cov, loose=loose, depth=depth)
+    mne.minimum_norm.write_inverse_operator(inv, fname)
+    return fname
