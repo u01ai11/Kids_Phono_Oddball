@@ -192,7 +192,7 @@ cp {raw_dir}/{rawfiles[0]} {outdir}/{rawfiles[0]}
             print(tcshf, file=open(f'{scriptdir}/batch_{num}.csh', 'w'))
 
             # execute this on the cluster
-            os.system(f'sbatch --job-name=max_{num} --constraint=maxfilter --mincpus=5 -t 1-0:00 {scriptdir}/batch_{i}.csh')
+            os.system(f'sbatch --job-name=max_{num} --constraint=maxfilter --mincpus=5 -t 1-0:00 {scriptdir}/batch_{num}.csh')
 
         if len(numfiles) > 2:
             print(f' {num}  has more than two epoch files, not doing this yet')

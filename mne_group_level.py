@@ -26,6 +26,9 @@ os.sched_setaffinity(0, {0,1,2,3,4,5,6,7,8})
 # make a list of files for pre-processing
 flist = [f for f in os.listdir(rawdir) if os.path.isfile(os.path.join(rawdir, f))]
 #%%
+red_utils.align_runs_max(rawdir, 'maxfilter_2.2.12', '/imaging/ai05/phono_oddball/aligned_raws', '/imaging/ai05/phono_oddball/fs_scripts')
+
+#%%
 # preprocess those files
 saved_list = red_preprocess.preprocess_multiple(flist=flist,
                                                 indir=rawdir,
