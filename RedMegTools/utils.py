@@ -171,7 +171,7 @@ def align_runs_max(raw_dir, max_com, outdir, scriptdir):
     :return:
     """
     # list all files
-    rawfiles = [f for f in os.listdir(raw_dir) if os.path.isfile(f)]
+    rawfiles = [f for f in os.listdir(raw_dir) if os.path.isfile(raw_dir + '/' + f)]
     nums = [f.split('_')[0] for f in rawfiles]
 
     for num in nums:

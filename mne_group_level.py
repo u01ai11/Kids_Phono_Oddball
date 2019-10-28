@@ -156,7 +156,6 @@ allepo = [f for f in os.listdir(mne_save_dir) if '_epo.fif' in f]
 eponum = set([f.split('_')[0] for f in allepo]) # parts
 
 
-
 # add file list
 allepo = [f'{mne_save_dir}/{f}' for f in allepo]
 #%% compute covariance matrix
