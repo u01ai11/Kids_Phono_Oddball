@@ -9,14 +9,18 @@ import RedMegTools.utils as red_utils
 import RedMegTools.inversion as red_inv
 import os
 import collections
+import mne
+import joblib
 
 # pointers to our directories
-rawdir = '/imaging/ai05/phono_oddball/maxfilt_raws'  # raw fifs to input
+rawdir = '/imaging/ai05/phono_oddball/aligned_raws'  # raw fifs to input
 mne_save_dir = '/imaging/ai05/phono_oddball/mne_files'  # where to save MNE MEG files
 source_dir = '/imaging/ai05/phono_oddball/mne_source_models'  # where to save MNE source recon files
 struct_dir = '/imaging/ai05/phono_oddball/structurals_renamed'  # where our structs are
 fs_sub_dir = '/imaging/ai05/phono_oddball/fs_subdir'  # fresurfer subject dir
 mne_src_dir = '/imaging/ai05/phono_oddball/mne_source_models'
+mne_epo_out = '/imaging/ai05/phono_oddball/mne_epoch'
+mne_evo_out = '/imaging/ai05/phono_oddball/mne_evoked'
 flist = [f for f in os.listdir(rawdir) if os.path.isfile(os.path.join(rawdir, f))]
 subnames_only = list(set([x.split('_')[0] for x in flist])) # get a unique list of IDs
 
@@ -27,8 +31,9 @@ os.sched_setaffinity(0, {0,1,2,3,4,5,6,7,8})
 
 # make a list of files for pre-processing
 flist = [f for f in os.listdir(rawdir) if os.path.isfile(os.path.join(rawdir, f))]
-#%%
+#%% align runs
 red_utils.align_runs_max(rawdir, 'maxfilter_2.2.12', '/imaging/ai05/phono_oddball/aligned_raws', '/imaging/ai05/phono_oddball/fs_scripts')
+
 
 #%%
 # preprocess those files
@@ -38,17 +43,22 @@ saved_list = red_preprocess.preprocess_multiple(flist=flist,
                                                 overwrite=False,
                                                 njobs=1)
 
+#%% merge runs raws
+
+
 #%% EPOCHED
+# flist for combined
+merge_raw = [f for f in flist if '_concat_' in f]
 # make a list of files for epoching from above
-flist = [os.path.basename(x) for x in saved_list]  # get filenames only
+#flist = [os.path.basename(x) for x in saved_list]  # get filenames only
 
 # epoch files from save list
 keys = {'Freq': 10, 'Dev Word': 11, 'Dev Non-Word': 12}  # pass in keys
 trigchan = 'STI101_up'  # pass in the trigger channel
 backup_trigchan = 'STI102'
-saved_epoch_list = red_epoch.epoch_multiple(flist=flist,
-                                            indir=mne_save_dir,
-                                            outdir=mne_save_dir,
+saved_epoch_list = red_epoch.epoch_multiple(flist=merge_raw,
+                                            indir=rawdir,
+                                            outdir=mne_epo_out,
                                             keys=keys,
                                             trigchan=trigchan,
                                             backup_trigchan=backup_trigchan,
@@ -78,8 +88,8 @@ flist = [os.path.basename(x) for x in saved_epoch_list]
 
 # run the process for getting evoked
 saved_evoked_list = red_epoch.evoked_multiple(flist=flist,
-                                              indir=mne_save_dir,
-                                              outdir=mne_save_dir,
+                                              indir=mne_epo_out,
+                                              outdir=mne_evo_out,
                                               keys=keys,
                                               contlist=contlist,
                                               contlist2=contlist2,
@@ -152,17 +162,27 @@ for mgf, trf, srf, bmf, in zip(megfs, transfs, srcfs, bemfs):
         del megfs[ind], transfs[ind], srcfs[ind], bemfs[ind]
     ind = ind+1
 
+#%% mop up and BEM any missing (usually from fsaverage)
+
+indices = [i for i, x in enumerate(checklist[3]) if x == '']
+mopups = [checklist[0][f][0] for f in indices if checklist[0][f] != '']
+
+joblib.Parallel(n_jobs=len(mopups))(
+           joblib.delayed(bem_mopup)(id_, mne_src_dir, fs_sub_dir) for id_ in mopups)
+
+
+
 #%% get a forward solution for them
 mne_fwd_files = red_inv.fwd_solution_multiple(megfs, transfs, srcfs, bemfs, rawdir, mne_src_dir, mne_src_dir, n_jobs=16)
 
 #%% combine runs for each participant
 #get epoched files for this
-allepo = [f for f in os.listdir(mne_save_dir) if '_epo.fif' in f]
+allepo = [f for f in os.listdir(mne_epo_out) if '_epo.fif' in f]
 eponum = set([f.split('_')[0] for f in allepo]) # parts
 
 
 # add file list
-allepo = [f'{mne_save_dir}/{f}' for f in allepo]
+allepo = [f'{mne_epo_out}/{f}' for f in allepo]
 #%% compute covariance matrix
 
 
@@ -181,7 +201,67 @@ cov_files = red_inv.cov_matrix_multiple(epochlist=allepo,
                                         rank=None,
                                         tmax=0,
                                         outdir=mne_src_dir,
-                                        njobs=16
+                                        njobs=5
                                         )
-#%%
+#%% compute an inverse solution
+# need 3 lists of files
+ids = [f.split('_')[0] for f in bem_nos]
+
+inraw, infwd, incov = [],  [], []
+allrs = [f for f in os.listdir(rawdir) if os.path.isfile(rawdir+'/'+f)]
+allss = [f for f in os.listdir(mne_src_dir) if os.path.isfile(mne_src_dir+'/'+f)]
+
+# get list of raws
+for id in ids:
+    raws = [f for f in allrs if id in f]
+    raws = [f for f in raws if 'concat' in f]
+    alls = [f for f in allss if id in f]
+    if len(raws) > 0:
+        inraw.append(rawdir + '/' + raws[0])
+    else:
+        inraw.append('')
+
+    fwds = [f for f in alls if 'fwd.fif' in f]
+    if len(fwds) > 0:
+        infwd.append(mne_src_dir + '/' + fwds[0])
+    else:
+        infwd.append('')
+
+    covs = [f for f in alls if 'concat-cov.fif' in f]
+    if len(covs) > 0:
+        incov.append(mne_src_dir + '/' + covs[0])
+    else:
+        incov.append('')
+
+# only include participant numbers with all files
+for ind, i_d in enumerate(ids):
+    if '' in [inraw[ind], infwd[ind], incov[ind]]:
+        del inraw[ind]; del infwd[ind]; del incov[ind]; del ids[ind]
+
+#%% check covariances
+# NOTE: for some reason the parallel script creates some empty covariance matrices
+# these can be fixed by recalculation (which is what the below does)
+
+import mne, numpy
+for i in range(len(incov)):
+    cov = mne.read_cov(incov[i])
+    if numpy.sum(cov.data) < 1:
+        print(f're-calculating {incov[i]}')
+        num = os.path.basename(incov[i]).split('_')[0]
+        epo = f'{mne_epo_out}/{num}_concat_epo.fif'
+        epochs = mne.read_epochs(epo)
+        newcov = mne.compute_covariance(epochs, method='empirical', tmax=0)
+        os.system(f'rm {incov[i]}')
+        mne.write_cov(incov[i], newcov)
+
+
+
+#%% compute an inverse solution
+fname_inv = red_inv.inv_op_multiple(infofs=inraw,
+                                    fwdfs=infwd,
+                                    covfs=incov,
+                                    loose=0.2,
+                                    depth=0.8,
+                                    outdir=mne_src_dir,
+                                    njobs=32)
 

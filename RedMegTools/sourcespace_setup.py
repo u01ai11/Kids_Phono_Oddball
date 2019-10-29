@@ -156,3 +156,4 @@ def __make_bem_individual(sub, fs_sub_dir, outdir, single_layers):
     bem_sol = mne.make_bem_solution(model)  # make bem solution using model
     mne.write_bem_solution(solname, bem_sol) # save as well to the outdir
     return solname
+

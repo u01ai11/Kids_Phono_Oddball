@@ -40,6 +40,7 @@ def check_ids(rawdir, fsdir, mnedir):
                 fs_match.append(matching2)
             else:
                 fs_match.append('')
+
         else:
             fs_match.append('')
 
@@ -141,6 +142,7 @@ def find_fwd_files(ids, mnedir, megdir):
     return (megfiles, transfiles, sourcefiles, bemfiles)
 
 
+
 def combine_epochs(nums, indir, outdir):
 
     listfiles = [f for f in os.listdir(indir) if '_epo.fif' in f]
@@ -162,6 +164,27 @@ def combine_epochs(nums, indir, outdir):
         return f'{outdir}/{num}_epo.fif'
 
 
+def combine_raws(nums, indir, outdir):
+    listfiles = [f for f in os.listdir(indir) if '_raw.fif' in f]
+    for num in nums:
+        try:
+            numfiles = [f for f in listfiles if num in f]
+            if len(numfiles) == 0:
+                print(f'no files for {num}')
+            if len(numfiles) == 1:
+                epochs_c = mne.io.read_raw_fif(f'{indir}/{numfiles[0]}')
+                epochs_c.save(f'{outdir}/{num}_concat_raw.fif')
+            if len(numfiles) == 2:
+                epoch1 = mne.io.read_raw_fif(f'{indir}/{numfiles[0]}')
+                epoch2 = mne.io.read_raw_fif(f'{indir}/{numfiles[1]}')
+                epochs_c = mne.concatenate_raws([epoch1, epoch2])
+                epochs_c.save(f'{outdir}/{num}_concat_raw.fif')
+            if len(numfiles) > 2:
+                print(f' {num}  has more than two epoch files, not doing this yet')
+        except:
+            print('something went wrong with' + num)
+
+
 def align_runs_max(raw_dir, max_com, outdir, scriptdir):
     """
     Aligns raw files in different runs to common headspace, and concatenates
@@ -172,7 +195,7 @@ def align_runs_max(raw_dir, max_com, outdir, scriptdir):
     """
     # list all files
     rawfiles = [f for f in os.listdir(raw_dir) if os.path.isfile(raw_dir + '/' + f)]
-    nums = [f.split('_')[0] for f in rawfiles]
+    nums = set([f.split('_')[0] for f in rawfiles])
 
     for num in nums:
         numfiles = [f for f in rawfiles if num in f]
@@ -198,3 +221,14 @@ cp {raw_dir}/{numfiles[0]} {outdir}/{numfiles[0]}
             print(f' {num}  has more than two epoch files, not doing this yet')
 
 
+def bem_mopup(ID, outdir, fs_sub_dir):
+    try:
+        model = mne.bem.make_watershed_bem(ID, subjects_dir=fs_sub_dir, overwrite=True)
+        bemname = f'{outdir}/{ID}-5120-5120-5120-bem.fif'
+        solname = f'{outdir}/{ID}-5120-5120-5120-bem-sol.fif'
+        mne.write_bem_surfaces(bemname, model)
+        bem_sol = mne.make_bem_solution(model)  # make bem solution using model
+        mne.write_bem_solution(solname, bem_sol)
+    except:
+        print(ID)
+        print('failed')

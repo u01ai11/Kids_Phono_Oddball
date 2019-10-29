@@ -220,11 +220,14 @@ def __inv_op_individual(infof, fwdf, covf, loose, depth, outdir):
     if os.path.isfile(fname):
         print(f'{fname} already exisits skipping')
         return fname
+    try:
+        info = mne.io.read_raw_fif(infof, preload=False)
+        fwd = mne.read_forward_solution(fwdf)
+        cov = mne.read_cov(covf)
 
-    info = mne.io.read_raw_fif(infof, preload=False)
-    fwd = mne.read_forward_solution(fwdf)
-    cov = mne.read_cov(covf)
-
-    inv = mne.minimum_norm.make_inverse_operator(info, fwd, cov, loose=loose, depth=depth)
-    mne.minimum_norm.write_inverse_operator(inv, fname)
+        inv = mne.minimum_norm.make_inverse_operator(info.info, fwd, cov, loose=loose, depth=depth)
+        mne.minimum_norm.write_inverse_operator(fname, inv)
+    except Exception as e:
+        print(fname + ' not made for some reason')
+        print(e)
     return fname
