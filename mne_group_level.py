@@ -177,12 +177,12 @@ mne_fwd_files = red_inv.fwd_solution_multiple(megfs, transfs, srcfs, bemfs, rawd
 
 #%% combine runs for each participant
 #get epoched files for this
-allepo = [f for f in os.listdir(mne_epo_out) if '_epo.fif' in f]
+allepo = [f for f in os.listdir(mne_save_dir) if '_epo.fif' in f]
 eponum = set([f.split('_')[0] for f in allepo]) # parts
 
 
 # add file list
-allepo = [f'{mne_epo_out}/{f}' for f in allepo]
+allepo = [f'{mne_save_dir}/{f}' for f in allepo]
 #%% compute covariance matrix
 
 
@@ -191,7 +191,7 @@ cov_files = red_inv.cov_matrix_multiple_cluster(epochlist=allepo,
                                                 method='empirical',
                                                 rank=None,
                                                 tmax=0,
-                                                outdir=mne_src_dir,
+                                                outdir='/imaging/ai05/phono_oddball/mne_cov_run',
                                                 pythonpath='/home/ai05/anaconda3/envs/mne/bin/python',
                                                 scriptpath='/home/ai05/clusterscripts'
                                                 )
@@ -200,8 +200,8 @@ cov_files = red_inv.cov_matrix_multiple(epochlist=allepo,
                                         method='empirical',
                                         rank=None,
                                         tmax=0,
-                                        outdir=mne_src_dir,
-                                        njobs=5
+                                        outdir='/imaging/ai05/phono_oddball/mne_cov_run',
+                                        njobs=10
                                         )
 #%% compute an inverse solution
 # need 3 lists of files
@@ -210,12 +210,13 @@ ids = [f.split('_')[0] for f in bem_nos]
 inraw, infwd, incov = [],  [], []
 allrs = [f for f in os.listdir(rawdir) if os.path.isfile(rawdir+'/'+f)]
 allss = [f for f in os.listdir(mne_src_dir) if os.path.isfile(mne_src_dir+'/'+f)]
-
+allcov = [f for f in os.listdir('/imaging/ai05/phono_oddball/mne_cov_run')]
 # get list of raws
 for id in ids:
     raws = [f for f in allrs if id in f]
     raws = [f for f in raws if 'concat' in f]
     alls = [f for f in allss if id in f]
+    allcs = [f for f in allcov if id in f]
     if len(raws) > 0:
         inraw.append(rawdir + '/' + raws[0])
     else:
@@ -227,9 +228,9 @@ for id in ids:
     else:
         infwd.append('')
 
-    covs = [f for f in alls if 'concat-cov.fif' in f]
+    covs = [f for f in allcs if '-cov.fif' in f]
     if len(covs) > 0:
-        incov.append(mne_src_dir + '/' + covs[0])
+        incov.append('/imaging/ai05/phono_oddball/mne_cov_run' + '/' + covs[0])
     else:
         incov.append('')
 
@@ -237,6 +238,7 @@ for id in ids:
 for ind, i_d in enumerate(ids):
     if '' in [inraw[ind], infwd[ind], incov[ind]]:
         del inraw[ind]; del infwd[ind]; del incov[ind]; del ids[ind]
+
 
 #%% check covariances
 # NOTE: for some reason the parallel script creates some empty covariance matrices
@@ -255,6 +257,11 @@ for i in range(len(incov)):
         mne.write_cov(incov[i], newcov)
 
 
+for i in range(len(incov)):
+    cov = mne.read_cov(incov[i])
+    if numpy.sum(cov.data) == 0:
+        print(f'sucky {incov[i]}')
+
 
 #%% compute an inverse solution
 fname_inv = red_inv.inv_op_multiple(infofs=inraw,
@@ -263,5 +270,16 @@ fname_inv = red_inv.inv_op_multiple(infofs=inraw,
                                     loose=0.2,
                                     depth=0.8,
                                     outdir=mne_src_dir,
-                                    njobs=32)
+                                    njobs=1)
 
+#%% check the files
+evoked =[mne_evo_out+'/'+f for f in os.listdir(mne_evo_out) if 'concat_ave' in f]
+ev_nums = [f.split('_')[0] for f in evoked]
+invs = [[i for i in fname_inv if n in i] for n in ev_nums] #list
+invs = [f[0] if len(f) > 0 else '' for f in invs] # first or empty
+
+for ind, i_d in enumerate(invs):
+    if '' in [invs[ind]]:
+        del evoked[ind]; del invs[ind];
+#%%
+plot_sources(evoked, invs,'/home/ai05/',fs_sub_dir )
