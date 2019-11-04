@@ -374,3 +374,66 @@ wordaverage = red group.src_group_average(inNword, hemis='both')
 vertno_max, time_max = wordaverage.get_peak()
 wordaverage.plot(backend='matplotlib', initial_time=time_max,
          smoothing_steps=5, hemi='rh').savefig('/home/ai05/test.png')
+
+#%% do manually
+import mne
+import numpy as np
+
+avlist_w = []
+avlist_n = []
+
+for pair in inWord:
+    est = mne.read_source_estimate(pair[0][0:-7], 'fsaverage')
+    avlist_w.append(est)
+
+for pair in inNword:
+    est = mne.read_source_estimate(pair[0][0:-7], 'fsaverage')
+    avlist_n.append(est)
+
+X_w = np.empty((avlist_w[0].shape[0], avlist_w[0].shape[1], len(avlist_w)))
+X_n = np.empty((avlist_n[0].shape[0], avlist_n[0].shape[1], len(avlist_n)))
+
+for i in range(len(avlist_w)):
+    X_w[:,:,i] = avlist_w[i].data
+
+for i in range(len(avlist_n)):
+    X_n[:,:,i] = avlist_w[i].data
+
+X_av = np.average(X_n, axis=2)
+
+# est.data = X_av
+#
+# vertno_max, time_max = est.get_peak()
+# est.plot(backend='matplotlib', initial_time=time_max,
+#          smoothing_steps=5, hemi='rh').savefig('/home/ai05/test.png')
+
+X = np.empty((avlist_n[0].shape[0], avlist_n[0].shape[1], len(avlist_n), 2))
+X[:,:,:,0] = X_w
+X[:,:,:,1] = X_n
+#%% cluster perm
+from scipy import stats as stats
+from mne.stats import (spatio_temporal_cluster_1samp_test,
+                       summarize_clusters_stc)
+src_fname = '/imaging/ai05/phono_oddball/mne_source_models/fsaverage_white-oct6-src.fif'
+src = mne.read_source_spaces(src_fname)
+fsave_vertices = [s['vertno'] for s in src]
+connectivity = mne.spatial_src_connectivity(src)
+
+X_con = X[:, :, :, 0] - X[:, :, :, 1] # paired contrast
+
+#    Note that X needs to be a multi-dimensional array of shape
+#    samples (subjects) x time x space, so we permute dimensions
+X_con = np.transpose(X_con, [2, 1, 0])
+
+#    Now let's actually do the clustering. This can take a long time...
+#    Here we set the threshold quite high to reduce computation.
+p_threshold = 0.001
+t_threshold = -stats.distributions.t.ppf(p_threshold / 2., 70 - 1)
+print('Clustering.')
+T_obs, clusters, cluster_p_values, H0 = clu = \
+    spatio_temporal_cluster_1samp_test(X_con, connectivity=None, n_jobs=1,
+                                       threshold=t_threshold, buffer_size=None,
+                                       verbose=True)
+#    Now select the clusters that are sig. at p < 0.05 (note that this value
+#    is multiple-comparisons corrected).
+good_cluster_inds = np.where(cluster_p_values < 0.05)[0]
