@@ -7,10 +7,12 @@ import RedMegTools.sourcespace_command_line as red_sourcespace_cmd
 import RedMegTools.sourcespace_setup as red_sourcespace_setup
 import RedMegTools.utils as red_utils
 import RedMegTools.inversion as red_inv
+import RedMegTools.group as red_group
 import os
 import collections
 import mne
 import joblib
+
 
 # pointers to our directories
 rawdir = '/imaging/ai05/phono_oddball/aligned_raws'  # raw fifs to input
@@ -21,6 +23,7 @@ fs_sub_dir = '/imaging/ai05/phono_oddball/fs_subdir'  # fresurfer subject dir
 mne_src_dir = '/imaging/ai05/phono_oddball/mne_source_models'
 mne_epo_out = '/imaging/ai05/phono_oddball/mne_epoch'
 mne_evo_out = '/imaging/ai05/phono_oddball/mne_evoked'
+src_ev_dir = '/imaging/ai05/phono_oddball/mne_ev_src'
 flist = [f for f in os.listdir(rawdir) if os.path.isfile(os.path.join(rawdir, f))]
 subnames_only = list(set([x.split('_')[0] for x in flist])) # get a unique list of IDs
 
@@ -306,14 +309,14 @@ words_invs = [i[0] if i != [] else '' for i in words_invs]
 words = [f'{mne_evo_out}/{f}' for f in words]
 
 # get non-word MNN responses
-non_words = [f for f in all_evo if 'MNN-Non-Word']
+non_words = [f for f in all_evo if 'MNN-Non-Word' in f]
 non_wordfs = []
 for i in range(len(non_words)):
     num = non_words[i].split('_')[0]
     for ii in range(len(all_fsub)):
         if num in all_fsub[ii]:
             non_wordfs.append(all_fsub[ii])
-non_words_invs = [[i[0] for i in fname_inv if n.split('_')[0] in i] for n in non_words] #list
+non_words_invs = [[i for i in fname_inv if n.split('_')[0] in i] for n in non_words] #list
 non_words_invs = [i[0] if i != [] else '' for i in non_words_invs]
 non_words = [f'{mne_evo_out}/{f}' for f in non_words]
 
@@ -328,5 +331,46 @@ non_word_src = red_inv.invert_multiple(evokedfs=words,
                                        fssub=wordfs,
                                        outdir='/imaging/ai05/phono_oddball/mne_ev_src',
                                        njobs=1)
+#%% Now the second one
+non_word_src = red_inv.invert_multiple(evokedfs=non_words,
+                                       invfs=non_words_invs,
+                                       lambda2 = 1. / 9.,
+                                       method='dSPM',
+                                       morph=True,
+                                       fsdir=fs_sub_dir,
+                                       fssub=non_wordfs,
+                                       outdir='/imaging/ai05/phono_oddball/mne_ev_src',
+                                       njobs=1)
 
-#%% Now go through and morph all solutions to common source space
+
+#%% get average of each for just looking at
+src_ev_dir = '/imaging/ai05/phono_oddball/mne_ev_src'
+
+src_evs = [f for f in os.listdir(src_ev_dir) if os.path.isfile(f'{src_ev_dir}/{f}')]
+wrd_ids = list(set([f.split('_')[0] for f in src_evs]))
+inWord = []
+inNword = []
+for ID in wrd_ids:
+    thisids = [f for f in src_evs if ID in f]
+    thisword = [f'{src_ev_dir}/{f}' for f in thisids if 'MNN-Word' in f]
+    thisword = [[f for f in thisword if 'rh' in f][0], [f for f in thisword if 'lh' in f][0]]
+    inWord.append(thisword)
+    thisnonword = [f'{src_ev_dir}/{f}' for f in thisids if 'Non-Word' in f]
+    thisnonword = [[f for f in thisnonword if 'rh' in f][0], [f for f in thisnonword if 'lh' in f][0]]
+    inNword.append(thisnonword)
+
+#%% look at a couple of plots
+est = mne.read_source_estimate(inWord[20][0], 'fsaverage')
+#est = mne.read_source_estimate(src_ev_dir+'/'+src_evs[2], 'fsaverage')
+vertno_max, time_max = est.get_peak()
+est.plot(backend='matplotlib', initial_time=time_max,
+         smoothing_steps=5).savefig('/home/ai05/test.png')
+
+#%% read and average
+
+wordaverage = red group.src_group_average(inNword, hemis='both')
+
+#%%
+vertno_max, time_max = wordaverage.get_peak()
+wordaverage.plot(backend='matplotlib', initial_time=time_max,
+         smoothing_steps=5, hemi='rh').savefig('/home/ai05/test.png')

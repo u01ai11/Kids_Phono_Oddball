@@ -277,7 +277,7 @@ def __invert_individual(evoked, inv, lambda2, method, morph, fsdir, fssub, outdi
     parts = os.path.basename(evoked).split('_')
     num = parts[0]
 
-    fname = f'{outdir}/{parts[0]}_{parts[2].split(".")[0]}_stc.fif'
+    fname = f'{outdir}/{parts[0]}_{parts[2].split(".")[0]}'
 
     if os.path.isfile(fname):
         print(f'{fname} ALREADY EXISTS -SKIPPING')
@@ -302,3 +302,4 @@ def __invert_individual(evoked, inv, lambda2, method, morph, fsdir, fssub, outdi
         print(fname + ' not made for some reason')
         print(e)
         return fname
+
