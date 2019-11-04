@@ -234,20 +234,17 @@ def bem_mopup(ID, outdir, fs_sub_dir):
         print(ID)
         print('failed')
 
-def plot_sources(evokeds, invs, outdir, fs_sub_dir):
 
+def plot_sources(evokeds, invs, outdir, fs_sub_dir):
     for i, evoke in enumerate(evokeds):
         this_ev = mne.read_evokeds(evoke)
         this_inv = mne.minimum_norm.read_inverse_operator(invs[i])
         stc_mne = mne.minimum_norm.apply_inverse(this_ev[0], this_inv, lambda2=1. / 9.)
         vertno_max, time_max = stc_mne.get_peak(hemi='lh')
-        this_plot = mp.figure.Figure()
         surfer_kwargs = dict(
             hemi='lh', subjects_dir=fs_sub_dir, views='lat',
             initial_time=time_max, time_unit='s', size=(800, 800),
             smoothing_steps=5, backend='matplotlib')
-
         brain = stc_mne.plot(**surfer_kwargs)
-        plt.savefig(f'{outdir}/{os.path.basename(evoke).split(".")[0]}.png', bbox_inches='tight')
-
+        brain.savefig(f'{outdir}/{os.path.basename(evoke).split(".")[0]}.png')
 

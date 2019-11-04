@@ -283,3 +283,50 @@ for ind, i_d in enumerate(invs):
         del evoked[ind]; del invs[ind];
 #%%
 plot_sources(evoked, invs,'/home/ai05/',fs_sub_dir )
+
+#%% source estimates for all evoked responses -- setup files
+
+# get all evoked files in folder
+all_evo = [f for f in os.listdir(mne_evo_out) if os.path.isfile(f'{mne_evo_out}/{f}')]
+
+# get all fsubs
+all_fsub = [f for f in os.listdir(fs_sub_dir) if os.path.isdir(f'{fs_sub_dir}/{f}')]
+all_fsub = [f for f in all_fsub if 'scaled' in f]
+
+# get word MNN responses
+words = [f for f in all_evo if 'MNN-Word' in f]
+wordfs =[]
+for i in range(len(words)):
+    num = words[i].split('_')[0]
+    for ii in range(len(all_fsub)):
+        if num in all_fsub[ii]:
+            wordfs.append(all_fsub[ii])
+words_invs = [[i for i in fname_inv if n.split('_')[0] in i] for n in words]  # list
+words_invs = [i[0] if i != [] else '' for i in words_invs]
+words = [f'{mne_evo_out}/{f}' for f in words]
+
+# get non-word MNN responses
+non_words = [f for f in all_evo if 'MNN-Non-Word']
+non_wordfs = []
+for i in range(len(non_words)):
+    num = non_words[i].split('_')[0]
+    for ii in range(len(all_fsub)):
+        if num in all_fsub[ii]:
+            non_wordfs.append(all_fsub[ii])
+non_words_invs = [[i[0] for i in fname_inv if n.split('_')[0] in i] for n in non_words] #list
+non_words_invs = [i[0] if i != [] else '' for i in non_words_invs]
+non_words = [f'{mne_evo_out}/{f}' for f in non_words]
+
+#%% run the first one
+
+non_word_src = red_inv.invert_multiple(evokedfs=words,
+                                       invfs=words_invs,
+                                       lambda2 = 1. / 9.,
+                                       method='dSPM',
+                                       morph=True,
+                                       fsdir=fs_sub_dir,
+                                       fssub=wordfs,
+                                       outdir='/imaging/ai05/phono_oddball/mne_ev_src',
+                                       njobs=1)
+
+#%% Now go through and morph all solutions to common source space

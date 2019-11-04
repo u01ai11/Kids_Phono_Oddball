@@ -231,3 +231,69 @@ def __inv_op_individual(infof, fwdf, covf, loose, depth, outdir):
         print(fname + ' not made for some reason')
         print(e)
     return fname
+
+def invert_multiple(evokedfs, invfs, lambda2, method, morph, fsdir, fssub, outdir, njobs):
+    """
+    :param evokedfs:
+        List of evoked files to invert
+    :param invfs:
+        Coressponding list of inverse operator files
+    :param lambda2:
+        Lambda to use for inversion
+    :param method:
+        The method for inversion to use from MNE.minimum_norm.apply_inverse
+    :param outdir:
+        Where to save the files
+    :param njobs:
+        How many josb to run in parallel
+    :return:
+        return the file paths for the inverted data
+    """
+
+
+    saved_files = []
+
+    if njobs == 1:
+        for i in range(len(evokedfs)):
+            savedfile = __invert_individual(evokedfs[i], invfs[i], lambda2, method, morph, fsdir, fssub[i], outdir)
+            saved_files.append(savedfile)
+    if njobs > 1:
+        saved_files = joblib.Parallel(n_jobs=njobs)(
+            joblib.delayed(__invert_individual())(e, i, lambda2, method, morph, fsdir, f, outdir) for (e, i, f) in zip(evokedfs, invfs, fssub))
+
+    return saved_files
+
+def __invert_individual(evoked, inv, lambda2, method, morph, fsdir, fssub, outdir):
+    """
+    Inherited from the main function
+    :param evoked:
+    :param inv:
+    :param lambda2:
+    :param method:
+    :param outdir:
+    :return:
+    """
+
+    parts = os.path.basename(evoked).split('_')
+    num = parts[0]
+
+    fname = f'{outdir}/{parts[0]}_{parts[2].split(".")[0]}_stc.fif'
+
+    if os.path.isfile(fname):
+        print(f'{fname} ALREADY EXISTS -SKIPPING')
+        return fname
+
+    if any([evoked == '', inv == '']):
+        print('empty inputs for evoked or inv')
+        return ''
+
+    evokedf = mne.read_evokeds(evoked)
+    invf = mne.minimum_norm.read_inverse_operator(inv)
+    stc_mne = mne.minimum_norm.apply_inverse(evokedf[0], invf, lambda2=lambda2, method=method)
+
+    if morph:
+        stc_morph = mne.morph_data(fssub, 'fsaverage', stc_mne, subjects_dir=fsdir)
+        stc_mne = stc_morph
+
+    stc_mne.save(fname)
+    return fname
