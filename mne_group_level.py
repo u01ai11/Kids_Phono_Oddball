@@ -397,7 +397,7 @@ for i in range(len(avlist_w)):
     X_w[:,:,i] = avlist_w[i].data
 
 for i in range(len(avlist_n)):
-    X_n[:,:,i] = avlist_w[i].data
+    X_n[:,:,i] = avlist_n[i].data
 
 X_av = np.average(X_n, axis=2)
 
@@ -419,6 +419,7 @@ src = mne.read_source_spaces(src_fname)
 fsave_vertices = [s['vertno'] for s in src]
 connectivity = mne.spatial_src_connectivity(src)
 
+X = np.abs(X)
 X_con = X[:, :, :, 0] - X[:, :, :, 1] # paired contrast
 
 #    Note that X needs to be a multi-dimensional array of shape
