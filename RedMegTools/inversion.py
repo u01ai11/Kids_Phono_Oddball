@@ -287,13 +287,18 @@ def __invert_individual(evoked, inv, lambda2, method, morph, fsdir, fssub, outdi
         print('empty inputs for evoked or inv')
         return ''
 
-    evokedf = mne.read_evokeds(evoked)
-    invf = mne.minimum_norm.read_inverse_operator(inv)
-    stc_mne = mne.minimum_norm.apply_inverse(evokedf[0], invf, lambda2=lambda2, method=method)
+    try:
+        evokedf = mne.read_evokeds(evoked)
+        invf = mne.minimum_norm.read_inverse_operator(inv)
+        stc_mne = mne.minimum_norm.apply_inverse(evokedf[0], invf, lambda2=lambda2, method=method)
 
-    if morph:
-        stc_morph = mne.morph_data(fssub, 'fsaverage', stc_mne, subjects_dir=fsdir)
-        stc_mne = stc_morph
+        if morph:
+            stc_morph = mne.morph_data(fssub, 'fsaverage', stc_mne, subjects_dir=fsdir)
+            stc_mne = stc_morph
 
-    stc_mne.save(fname)
-    return fname
+        stc_mne.save(fname)
+        return fname
+    except Exception as e:
+        print(fname + ' not made for some reason')
+        print(e)
+        return fname
