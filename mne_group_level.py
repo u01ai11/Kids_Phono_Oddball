@@ -44,7 +44,7 @@ saved_list = red_preprocess.preprocess_multiple(flist=flist,
                                                 indir=rawdir,
                                                 outdir=mne_save_dir,
                                                 overwrite=False,
-                                                njobs=1)
+                                                njobs=10)
 
 #%% merge runs raws
 
@@ -418,12 +418,12 @@ connectivity = mne.spatial_src_connectivity(src)
 X = np.abs(X)
 X_con = X[:, :, :, 0] - X[:, :, :, 1] # paired contrast
 
-np.save(f'{mne_save_dir}/group_summary.npy', X_con)
+
 
 #    Note that X needs to be a multi-dimensional array of shape
 #    samples (subjects) x time x space, so we permute dimensions
 X_con = np.transpose(X_con, [2, 1, 0])
-
+np.save(f'{mne_save_dir}/group_summary.npy', X_con)
 # set parallel things
 mne.set_memmap_min_size('1M')
 mne.set_cache_dir('/tmp')

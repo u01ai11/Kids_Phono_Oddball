@@ -77,17 +77,11 @@ def __preprocess_individual(file, outdir, overwrite):
         print('could not read ' + file)
         return ''
 
-    # 50 Hz remove power line noise with a notch filter
-    raw.notch_filter(np.arange(50, 241, 50), filter_length='auto',
-                     phase='zero')
-
-    # 1Hz highpass filter to remove slow drift (might have to revisit this as ICA works better with 1Hz hp)
-    raw.filter(1, None, l_trans_bandwidth='auto', filter_length='auto',
-               phase='zero')
+    raw.filter(1, 50., fir_design='firwin')
 
     # Run ICA on raw data to find blinks and eog
-    ica = mne.preprocessing.ICA(n_components=25, method='infomax').fit(
-        raw)
+    ica = mne.preprocessing.ICA(n_components=25, method='fastica').fit(raw)
+
     try:
         # look for and remove EOG
         eog_epochs = mne.preprocessing.create_eog_epochs(raw)  # get epochs of eog (if this exists)

@@ -60,7 +60,8 @@ def submit_cluster_perm(Xf, srcf, jobs, buffer, t_thresh, scriptpath, pythonpath
     pycom = f"""
 import mne 
 import numpy as np
-
+mne.set_memmap_min_size('1M')
+mne.set_cache_dir('/tmp')
 X = np.load('{Xf}')
 src = mne.read_source_spaces('{srcf}')
 connectivity = mne.spatial_src_connectivity(src)
@@ -77,7 +78,7 @@ np.save('{outpath}/clus_results', clu)
 
     # construct csh file
     tcshf = f"""#!/bin/tcsh
-    {pythonpath} {scriptpath}/batch_clustperm.py.py
+    {pythonpath} {scriptpath}/batch_clustperm.py
             """
     # save to directory
     print(tcshf, file=open(f'{scriptpath}/batch_clustperm.csh', 'w'))
