@@ -370,6 +370,7 @@ est.plot(backend='matplotlib', initial_time=time_max,
 inw = [f[0] for f in inWord]
 innw = [f[0] for f in inWord]
 X = red_group.src_concat_mat([inw, innw], 'fsaverage')
+
 #%% do manually
 import mne
 import numpy as np
@@ -417,6 +418,8 @@ connectivity = mne.spatial_src_connectivity(src)
 X = np.abs(X)
 X_con = X[:, :, :, 0] - X[:, :, :, 1] # paired contrast
 
+np.save(f'{mne_save_dir}/group_summary.npy', X_con)
+
 #    Note that X needs to be a multi-dimensional array of shape
 #    samples (subjects) x time x space, so we permute dimensions
 X_con = np.transpose(X_con, [2, 1, 0])
@@ -427,9 +430,9 @@ mne.set_cache_dir('/tmp')
 
 #    Now let's actually do the clustering. This can take a long time...
 #    Here we set the threshold quite high to reduce computation.
-p_threshold = 0.001
+p_threshold = 0.05
 #t_threshold = -stats.distributions.t.ppf(p_threshold / 2., 70 - 1)
-t_threshold = 2
+t_threshold = 1.5
 print('Clustering.')
 T_obs, clusters, cluster_p_values, H0 = clu = \
     spatio_temporal_cluster_1samp_test(X_con, connectivity=connectivity, n_jobs=10,
@@ -438,3 +441,15 @@ T_obs, clusters, cluster_p_values, H0 = clu = \
 #    Now select the clusters that are sig. at p < 0.05 (note that this value
 #    is multiple-comparisons corrected).
 good_cluster_inds = np.where(cluster_p_values < 0.05)[0]
+
+#%% submit to cluster
+
+red_group.submit_cluster_perm(Xf = f'{mne_save_dir}/group_summary.npy',
+                              srcf = src_fname,
+                              jobs = 28,
+                              buffer= 1000,
+                              t_thresh=1.5,
+                              scriptpath='/home/ai05',
+                              pythonpath='/home/ai05/anaconda3/envs/mne/bin/python',
+                              outpath='/imaging/ai05/phono_oddball'
+                             )
