@@ -366,15 +366,10 @@ vertno_max, time_max = est.get_peak()
 est.plot(backend='matplotlib', initial_time=time_max,
          smoothing_steps=5).savefig('/home/ai05/test.png')
 
-#%% read and average
-
-wordaverage = red group.src_group_average(inNword, hemis='both')
-
-#%%
-vertno_max, time_max = wordaverage.get_peak()
-wordaverage.plot(backend='matplotlib', initial_time=time_max,
-         smoothing_steps=5, hemi='rh').savefig('/home/ai05/test.png')
-
+#%% read and create big matrix
+inw = [f[0] for f in inWord]
+innw = [f[0] for f in inWord]
+X = red_group.src_concat_mat([inw, innw], 'fsaverage')
 #%% do manually
 import mne
 import numpy as np
@@ -414,7 +409,7 @@ X[:,:,:,1] = X_n
 from scipy import stats as stats
 from mne.stats import (spatio_temporal_cluster_1samp_test,
                        summarize_clusters_stc)
-src_fname = '/imaging/ai05/phono_oddball/mne_source_models/fsaverage_white-oct6-src.fif'
+src_fname = '/imaging/ai05/phono_oddball/mne_source_models/fsaverage-ico5-src.fif'
 src = mne.read_source_spaces(src_fname)
 fsave_vertices = [s['vertno'] for s in src]
 connectivity = mne.spatial_src_connectivity(src)
@@ -426,14 +421,19 @@ X_con = X[:, :, :, 0] - X[:, :, :, 1] # paired contrast
 #    samples (subjects) x time x space, so we permute dimensions
 X_con = np.transpose(X_con, [2, 1, 0])
 
+# set parallel things
+mne.set_memmap_min_size('1M')
+mne.set_cache_dir('/tmp')
+
 #    Now let's actually do the clustering. This can take a long time...
 #    Here we set the threshold quite high to reduce computation.
 p_threshold = 0.001
-t_threshold = -stats.distributions.t.ppf(p_threshold / 2., 70 - 1)
+#t_threshold = -stats.distributions.t.ppf(p_threshold / 2., 70 - 1)
+t_threshold = 2
 print('Clustering.')
 T_obs, clusters, cluster_p_values, H0 = clu = \
-    spatio_temporal_cluster_1samp_test(X_con, connectivity=None, n_jobs=1,
-                                       threshold=t_threshold, buffer_size=None,
+    spatio_temporal_cluster_1samp_test(X_con, connectivity=connectivity, n_jobs=10,
+                                       threshold=t_threshold, buffer_size=500,
                                        verbose=True)
 #    Now select the clusters that are sig. at p < 0.05 (note that this value
 #    is multiple-comparisons corrected).
