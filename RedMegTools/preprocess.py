@@ -64,7 +64,7 @@ def preprocess_cluster(flist, indir, outdir, scriptpath, pythonpath ,overwrite):
 import sys 
 sys.path.insert(0, '/home/ai05/Kids_Phono_Oddball')
 import RedMegTools.preprocess as red_preprocess
-red_preprocess.__preprocess_individual('{indir}/{flist[i]}, '{outdir}', {overwrite})
+red_preprocess.__preprocess_individual('{indir}/{flist[i]}', '{outdir}', {overwrite})
         """
         # save to file
         print(pythonf, file=open(f'{scriptpath}/preproc_{i}.py', 'w'))

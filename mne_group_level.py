@@ -44,6 +44,14 @@ saved_list = red_preprocess.preprocess_multiple(flist=flist,
                                                 outdir=mne_save_dir,
                                                 overwrite=False,
                                                 njobs=10)
+#%% or use cluster
+saved_list = red_preprocess.preprocess_cluster(flist=flist,
+                                                indir=rawdir,
+                                                outdir=rawdir,
+                                               scriptpath = '/imaging/ai05/phono_oddball/fs_scripts',
+                                               pythonpath = '/imaging/local/software/miniconda/envs/mne0.19/bin/python',
+                                                overwrite=False)
+
 
 #%% merge runs raws
 
