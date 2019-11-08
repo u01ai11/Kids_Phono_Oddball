@@ -37,7 +37,6 @@ flist = [f for f in os.listdir(rawdir) if os.path.isfile(os.path.join(rawdir, f)
 #%% align runs
 red_utils.align_runs_max(rawdir, 'maxfilter_2.2.12', '/imaging/ai05/phono_oddball/aligned_raws', '/imaging/ai05/phono_oddball/fs_scripts')
 
-
 #%%
 # preprocess those files
 saved_list = red_preprocess.preprocess_multiple(flist=flist,
@@ -53,7 +52,7 @@ saved_list = red_preprocess.preprocess_multiple(flist=flist,
 # flist for combined
 merge_raw = [f for f in flist if '_concat_' in f]
 # make a list of files for epoching from above
-#flist = [os.path.basename(x) for x in saved_list]  # get filenames only
+flist = [os.path.basename(x) for x in saved_list]  # get filenames only
 
 # epoch files from save list
 keys = {'Freq': 10, 'Dev Word': 11, 'Dev Non-Word': 12}  # pass in keys
@@ -176,16 +175,23 @@ joblib.Parallel(n_jobs=len(mopups))(
 
 
 #%% get a forward solution for them
-mne_fwd_files = red_inv.fwd_solution_multiple(megfs, transfs, srcfs, bemfs, rawdir, mne_src_dir, mne_src_dir, n_jobs=16)
+mne_fwd_files = red_inv.fwd_solution_multiple(megfs,
+                                              transfs,
+                                              srcfs,
+                                              bemfs,
+                                              rawdir,
+                                              mne_src_dir,
+                                              mne_src_dir,
+                                              n_jobs=16)
 
 #%% combine runs for each participant
 #get epoched files for this
-allepo = [f for f in os.listdir(mne_save_dir) if '_epo.fif' in f]
+allepo = [f for f in os.listdir(mne_epo_out) if '_epo.fif' in f]
 eponum = set([f.split('_')[0] for f in allepo]) # parts
 
 
 # add file list
-allepo = [f'{mne_save_dir}/{f}' for f in allepo]
+allepo = [f'{mne_epo_out}/{f}' for f in allepo]
 #%% compute covariance matrix
 
 
@@ -204,7 +210,7 @@ cov_files = red_inv.cov_matrix_multiple(epochlist=allepo,
                                         rank=None,
                                         tmax=0,
                                         outdir='/imaging/ai05/phono_oddball/mne_cov_run',
-                                        njobs=10
+                                        njobs=15
                                         )
 #%% compute an inverse solution
 # need 3 lists of files
@@ -220,6 +226,7 @@ for id in ids:
     raws = [f for f in raws if 'concat' in f]
     alls = [f for f in allss if id in f]
     allcs = [f for f in allcov if id in f]
+    allcs = [f for f in allcs if 'concat' not in f]
     if len(raws) > 0:
         inraw.append(rawdir + '/' + raws[0])
     else:
@@ -273,10 +280,10 @@ fname_inv = red_inv.inv_op_multiple(infofs=inraw,
                                     loose=0.2,
                                     depth=0.8,
                                     outdir=mne_src_dir,
-                                    njobs=1)
+                                    njobs=10)
 
 #%% check the files
-evoked =[mne_evo_out+'/'+f for f in os.listdir(mne_evo_out) if 'concat_ave' in f]
+evoked =[mne_evo_out+'/'+f for f in os.listdir(mne_evo_out) if 'MNN-Word_ave' in f]
 ev_nums = [f.split('_')[0] for f in evoked]
 invs = [[i for i in fname_inv if n in i] for n in ev_nums] #list
 invs = [f[0] if len(f) > 0 else '' for f in invs] # first or empty
@@ -453,3 +460,10 @@ red_group.submit_cluster_perm(Xf = f'{mne_save_dir}/group_summary.npy',
                               pythonpath='/home/ai05/anaconda3/envs/mne/bin/python',
                               outpath='/imaging/ai05/phono_oddball'
                              )
+
+#%% rename some bits
+allevo = os.listdir(mne_evo_out)
+for f in allevo:
+    nf = mne_evo_out + '/' + f
+    new = nf.replace('_raw.fif_', '_concat_')
+    os.rename(nf, new)

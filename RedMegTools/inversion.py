@@ -181,6 +181,7 @@ def __cov_matrix_individual(epochf, method, rank, tmax, outdir):
 
     epochs = mne.read_epochs(epochf)
     cov = mne.compute_covariance(epochs[0], rank=rank, method=method, tmax=tmax)
+    cov = mne.cov.regularize(cov, epochs[0].info, mag=0.1, grad=0.1)
     mne.write_cov(outname, cov)
     return outname
 

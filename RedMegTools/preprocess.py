@@ -41,6 +41,45 @@ def preprocess_multiple(flist, indir, outdir, overwrite, njobs):
     return saved_files
 
 
+def preprocess_cluster(flist, indir, outdir, scriptpath, pythonpath ,overwrite):
+    """ Takes a list of raw files and preprocesses them
+    Parameters
+    ----------
+    :param flist:
+        A list of files we want to read in and pre-process
+    :param indir:
+        Where we find the files
+    :param outdir:
+        where we want to save those files
+    :param overwrite:
+        truee or false. whether to overwrite the files if already exist
+    :return saved_files:
+        A list of files we have saved
+    """
+
+    # get preprocess individual function as text
+    for i in range(len(flist)):
+
+        pythonf = f"""
+import sys 
+sys.path.insert(0, '/home/ai05/Kids_Phono_Oddball')
+import RedMegTools.preprocess as red_preprocess
+red_preprocess.__preprocess_individual('{indir}/{flist[i]}, '{outdir}', {overwrite})
+        """
+        # save to file
+        print(pythonf, file=open(f'{scriptpath}/preproc_{i}.py', 'w'))
+
+        # construct csh file
+        tcshf = f"""#!/bin/tcsh
+        {pythonpath} {scriptpath}/preproc_{i}.py
+                """
+        # save to directory
+        print(tcshf, file=open(f'{scriptpath}/preproc_{i}.csh', 'w'))
+
+        # execute this on the cluster
+        os.system(f'sbatch --job-name=preproc_{i} --mincpus=5 -t 0-1:00 {scriptpath}/preproc_{i}.csh')
+
+
 def __preprocess_individual(file, outdir, overwrite):
     """ Internal function for preprocessing raw MEG files
     :param file:
@@ -116,9 +155,11 @@ def __preprocess_individual(file, outdir, overwrite):
         else:  # flag for manual ICA inspection and removal
             print(f'{num} run {f_only[2]} cannot detect ecg automatically manual ICA must be done')
             no_ecg_removed = True
+            ica.apply(inst=raw)
     except RuntimeError:
         print(f'{num} run {f_only[2]} cannot detect ecg automatically manual ICA must be done')
         no_ecg_removed = True
+        ica.apply(inst=raw)
 
     # save the file
     if no_ecg_removed and no_eog_removed:

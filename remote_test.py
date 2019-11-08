@@ -197,3 +197,77 @@ MNN_diff = mne.combine_evoked([MNN_word, -MNN_nonword], weights='equal')
 
 
 #mne_preprocess.process_multiple()
+
+
+#%% retest
+rawdir ='/imaging/ai05/phono_oddball/aligned_raws'
+num = '0289'
+raw1f = f'{num}_Phon_1_max_raw.fif'
+raw2f= f'{num}_Phon_2_max_raw.fif'
+rawcf = f'{num}_concat_raw.fif'
+raw1 = mne.io.read_raw_fif(rawdir+'/'+raw1f, preload=True)
+raw2 = mne.io.read_raw_fif(rawdir+'/'+raw2f, preload=True)
+rawc = mne.io.read_raw_fif(rawdir+'/'+rawcf, preload=True)
+#%% filter etc
+for raw in [raw1, raw2]:
+    raw.filter(1, 50., fir_design='firwin')
+    ica = mne.preprocessing.ICA(n_components=25, method='fastica').fit(raw)
+
+    eog_epochs = mne.preprocessing.create_eog_epochs(raw)  # get epochs of eog (if this exists)
+    eog_inds, eog_scores = ica.find_bads_eog(eog_epochs, threshold=1)  # try and find correlated components
+    ica.exclude.extend(eog_inds[0:3])
+    ecg_epochs = mne.preprocessing.create_ecg_epochs(raw)  # get epochs of eog (if this exists)
+    ecg_inds, ecg_scores = ica.find_bads_ecg(ecg_epochs, threshold=0.5)  # try and find correlated components
+    ica.exclude.extend(ecg_inds[0:3])  # exclude top 3 components
+    ica.apply(inst=raw)  # apply to raw
+    # define f
+#%% epoch
+epos = []
+
+for i, raw in enumerate([raw1, raw2]):
+    # Extract before downsampling to avoid precision errors
+    events = mne.find_events(raw)  # find events from file
+    event_id = {'Freq': 10, 'Dev Word': 11, 'Dev Non-Word': 12}  # trigger codes for events
+    trig_chan = 'STI101_up'  # name of the chanel to take values from
+    picks = mne.pick_types(raw.info, meg=True, eog=True, ecg=True, include=trig_chan, exclude='bads')  # select channels
+    tmin, tmax = -0.3, 1.0
+    epochs = mne.Epochs(raw, events, event_id, tmin, tmax, picks=picks, baseline=(None, 0), preload=True)
+    # downsample and decimate  epochs
+    epochs = mne.Epochs.decimate(epochs, 1)  # downsample to 10hz
+    epos.append(epochs)
+
+epoch =mne.concatenate_epochs(epos)
+evoked = epochs.average();
+evokeds = [epochs[name].average() for name in ('Freq', 'Dev Word', 'Dev Non-Word')]
+MNN = mne.combine_evoked([evokeds[0], -evokeds[1], -evokeds[2]], weights='equal')
+MNN_word = mne.combine_evoked([evokeds[0], -evokeds[1]], weights='equal')
+MNN_nonword = mne.combine_evoked([evokeds[0], -evokeds[2]], weights='equal')
+MNN_diff = mne.combine_evoked([MNN_word, -MNN_nonword], weights='equal')
+
+#%% noise covariance
+cov = mne.compute_covariance(epoch, method='empirical', tmax=0.)
+cov = mne.cov.regularize(cov, epoch[0].info, mag=0.1, grad=0.1)
+
+#%% load other stuff
+src_stuff = [f for f in os.listdir('/imaging/ai05/phono_oddball/mne_source_models') if num in f]
+fwdf = [f for f in src_stuff if 'fwd' in f][0]
+fwd = mne.read_forward_solution('/imaging/ai05/phono_oddball/mne_source_models/'+fwdf)
+
+#%% make inverse operator
+inv = mne.minimum_norm.make_inverse_operator(epoch.info, fwd, cov)
+
+#%% stc
+stc = mne.minimum_norm.apply_inverse(MNN, inv, method='dSPM')
+
+#%% plot
+hemi = 'lh'
+vertno_max, time_max = stc.get_peak(hemi=hemi)
+surfer_kwargs = dict(
+    hemi=hemi, subjects_dir=fs_sub_dir, views='lat',
+    initial_time=.9, time_unit='s', size=(800, 800),
+    smoothing_steps=5, backend='matplotlib')
+brain = stc.plot(**surfer_kwargs)
+brain.savefig(f'/home/ai05/{num}_{hemi}_bothepo.png')
+
+
+
