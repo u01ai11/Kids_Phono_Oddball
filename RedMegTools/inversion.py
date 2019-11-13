@@ -316,7 +316,7 @@ sys.path.insert(0, '/home/ai05/Kids_Phono_Oddball')
 import os 
 import mne 
 
-fname = os.path.basename('{evoked_list[i]}').split('.')[0] + '-lcmv')
+fname = os.path.basename('{evoked_list[i]}').split('.')[0] + '-lcmv'
 
 epoch =  mne.read_epochs('{epoch_list[i]}')
 ev = mne.read_evokeds('{evoked_list[i]}')
