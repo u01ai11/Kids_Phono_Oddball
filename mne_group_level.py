@@ -44,7 +44,7 @@ saved_list = red_preprocess.preprocess_multiple(flist=flist,
                                                 outdir=mne_save_dir,
                                                 overwrite=False,
                                                 njobs=10)
-#%% or use cluster
+#%% or use cluster (takes about 15-20  minutes, make yourself a coffee)
 saved_list = red_preprocess.preprocess_cluster(flist=flist,
                                                 indir=rawdir,
                                                 outdir=rawdir,
@@ -53,20 +53,38 @@ saved_list = red_preprocess.preprocess_cluster(flist=flist,
                                                 overwrite=False)
 
 
-#%% merge runs raws
+#%% some of these mothers have got eog or ecg channels, we need to manually check these
+filtered_in = [f for f in os.listdir(rawdir) if 'clean_raw' in f]
 
+man_ica = [f for f in filtered_in if 'no' in f]
+#%%
+i +=1
+f = man_ica[i]
+raw = mne.io.read_raw_fif(f'{rawdir}/{f}', preload=True)
+ica = mne.preprocessing.ICA(n_components=25, method='fastica').fit(raw)
+comps = ica.plot_components()
+comps[0].savefig('/home/ai05/comp.png')
+comps[1].savefig('/home/ai05/comp2.png')
+raw.plot(start=120).savefig('/home/ai05/raw.png')
+#%% change inds and decide
+ica.exclude =[1,8,9,17]
+ica.apply(raw)
+# if you need to plot the channels
+raw.plot(start=120).savefig('/home/ai05/raw.png')
+#%%
+raw.save(f'{rawdir}/{f.split("_")[0]}_{f.split("_")[1]}_clean_raw.fif', overwrite=True)
 
+#%% if you need to plot the channels
+raw.plot(start=120).savefig('/home/ai05/raw.png')
 #%% EPOCHED
-# flist for combined
-merge_raw = [f for f in flist if '_concat_' in f]
-# make a list of files for epoching from above
-flist = [os.path.basename(x) for x in saved_list]  # get filenames only
+
+filtered_in = [f for f in os.listdir(rawdir) if 'clean_raw' in f]
 
 # epoch files from save list
 keys = {'Freq': 10, 'Dev Word': 11, 'Dev Non-Word': 12}  # pass in keys
 trigchan = 'STI101_up'  # pass in the trigger channel
 backup_trigchan = 'STI102'
-saved_epoch_list = red_epoch.epoch_multiple(flist=merge_raw,
+saved_epoch_list = red_epoch.epoch_multiple(flist=filtered_in,
                                             indir=rawdir,
                                             outdir=mne_epo_out,
                                             keys=keys,
@@ -75,6 +93,32 @@ saved_epoch_list = red_epoch.epoch_multiple(flist=merge_raw,
                                             times=[-0.3, 0.8],
                                             overwrite=True,
                                             njobs=32)
+
+#%% merge those epochs
+epo_base = [os.path.basename(f) for f in saved_epoch_list]
+epo_nums = set([f.split('_')[0] for f in epo_base])
+
+
+def merge_epo(num, mne_epo_out, saved_epoch_list):
+
+    if os.path.isfile(f'{mne_epo_out}/{num}_concat_epo.fif'):
+        print(f'{mne_epo_out}/{num}_concat_epo.fif')
+        print('exists, skipping')
+        return
+
+    nums_fs = [f for f in saved_epoch_list if '/'+num+'_' in f]
+    merge_l = []
+    for file in nums_fs:
+        epo = mne.read_epochs(file)
+        merge_l.append(epo)
+    merged = mne.epochs.concatenate_epochs(merge_l)
+    merged.save(f'{mne_epo_out}/{num}_concat_epo.fif')
+
+joblib.Parallel(n_jobs=19)(
+    joblib.delayed(merge_epo)(num, mne_epo_out, saved_epoch_list) for num in epo_nums)
+
+for num in epo_nums:
+    merge_epo(num, mne_epo_out, saved_epoch_list)
 
 #%% EVOKED
 # compute evoked files from epoch list
@@ -94,7 +138,7 @@ contlist2 = collections.OrderedDict({
 })
 
 # get an input file name list
-flist = [os.path.basename(x) for x in saved_epoch_list]
+flist = [f for f in os.listdir(mne_epo_out) if '_concat_' in f]
 
 # run the process for getting evoked
 saved_evoked_list = red_epoch.evoked_multiple(flist=flist,
@@ -146,7 +190,8 @@ mne_src_files = red_sourcespace_setup.setup_src_multiple(sublist=fs_scaled,
                                                          outdir=mne_src_dir,
                                                          spacing='oct6',
                                                          surface='white',
-                                                         n_jobs1=19,
+                                                         src_mode='volume',
+                                                         n_jobs1=12,
                                                          n_jobs2=1)
 #%% BEM MNE input stuff
 mne_bem_files = red_sourcespace_setup.make_bem_multiple(sublist=fs_scaled,
@@ -180,8 +225,8 @@ mopups = [checklist[0][f][0] for f in indices if checklist[0][f] != '']
 joblib.Parallel(n_jobs=len(mopups))(
            joblib.delayed(bem_mopup)(id_, mne_src_dir, fs_sub_dir) for id_ in mopups)
 
-
-
+#%%
+#srcfs = [f'{f.split("_")[0]}_{f.split("_")[1]}_white-oct6-volume-src.fif' for f in srcfs]
 #%% get a forward solution for them
 mne_fwd_files = red_inv.fwd_solution_multiple(megfs,
                                               transfs,
@@ -194,7 +239,7 @@ mne_fwd_files = red_inv.fwd_solution_multiple(megfs,
 
 #%% combine runs for each participant
 #get epoched files for this
-allepo = [f for f in os.listdir(mne_epo_out) if '_epo.fif' in f]
+allepo = [f for f in os.listdir(mne_epo_out) if 'concat_epo.fif' in f]
 eponum = set([f.split('_')[0] for f in allepo]) # parts
 
 
@@ -226,15 +271,15 @@ ids = [f.split('_')[0] for f in bem_nos]
 
 inraw, infwd, incov = [],  [], []
 allrs = [f for f in os.listdir(rawdir) if os.path.isfile(rawdir+'/'+f)]
+allrs = [f for f in allrs if '_1_' in f]
 allss = [f for f in os.listdir(mne_src_dir) if os.path.isfile(mne_src_dir+'/'+f)]
 allcov = [f for f in os.listdir('/imaging/ai05/phono_oddball/mne_cov_run')]
 # get list of raws
 for id in ids:
     raws = [f for f in allrs if id in f]
-    raws = [f for f in raws if 'concat' in f]
     alls = [f for f in allss if id in f]
     allcs = [f for f in allcov if id in f]
-    allcs = [f for f in allcs if 'concat' not in f]
+    allcs = [f for f in allcs if 'concat' in f]
     if len(raws) > 0:
         inraw.append(rawdir + '/' + raws[0])
     else:
@@ -291,8 +336,10 @@ fname_inv = red_inv.inv_op_multiple(infofs=inraw,
                                     njobs=10)
 
 #%% check the files
-evoked =[mne_evo_out+'/'+f for f in os.listdir(mne_evo_out) if 'MNN-Word_ave' in f]
-ev_nums = [f.split('_')[0] for f in evoked]
+evoked =[mne_evo_out+'/'+f for f in os.listdir(mne_evo_out) if 'MNN_ave' in f]
+ev_nums = [os.path.basename(f).split('_')[0] for f in evoked]
+fname_inv = [f for f in os.listdir(mne_src_dir) if 'concat-inv' in f]
+fname_inv = [f'{mne_src_dir}/{f}' for f in fname_inv]
 invs = [[i for i in fname_inv if n in i] for n in ev_nums] #list
 invs = [f[0] if len(f) > 0 else '' for f in invs] # first or empty
 
@@ -300,7 +347,7 @@ for ind, i_d in enumerate(invs):
     if '' in [invs[ind]]:
         del evoked[ind]; del invs[ind];
 #%%
-plot_sources(evoked, invs,'/home/ai05/',fs_sub_dir )
+plot_sources(evoked, invs,'/home/ai05/',fs_sub_dir );
 
 #%% source estimates for all evoked responses -- setup files
 
@@ -314,33 +361,50 @@ all_fsub = [f for f in all_fsub if 'scaled' in f]
 # get word MNN responses
 words = [f for f in all_evo if 'MNN-Word' in f]
 wordfs =[]
+word_invs = []
 for i in range(len(words)):
     num = words[i].split('_')[0]
-    for ii in range(len(all_fsub)):
-        if num in all_fsub[ii]:
-            wordfs.append(all_fsub[ii])
-words_invs = [[i for i in fname_inv if n.split('_')[0] in i] for n in words]  # list
-words_invs = [i[0] if i != [] else '' for i in words_invs]
+    alln = [i for i in all_fsub if num in i]
+    match = [i for i in alln if i.split('_')[0] == num]
+    wordfs.append(match[0])
+
+    alln = [i for i in fname_inv if num in i]
+    match = [i for i in alln if os.path.basename(i).split('_')[0] == num]
+    if len(match) > 0:
+        word_invs.append(match[0])
+    else:
+        word_invs.append('')
+
+
 words = [f'{mne_evo_out}/{f}' for f in words]
 
 # get non-word MNN responses
+# get word MNN responses
 non_words = [f for f in all_evo if 'MNN-Non-Word' in f]
-non_wordfs = []
+non_wordfs =[]
+non_word_invs = []
 for i in range(len(non_words)):
     num = non_words[i].split('_')[0]
-    for ii in range(len(all_fsub)):
-        if num in all_fsub[ii]:
-            non_wordfs.append(all_fsub[ii])
-non_words_invs = [[i for i in fname_inv if n.split('_')[0] in i] for n in non_words] #list
-non_words_invs = [i[0] if i != [] else '' for i in non_words_invs]
+    alln = [i for i in all_fsub if num in i]
+    match = [i for i in alln if i.split('_')[0] == num]
+    non_wordfs.append(match[0])
+
+    alln = [i for i in fname_inv if num in i]
+    match = [i for i in alln if os.path.basename(i).split('_')[0] == num]
+    if len(match) > 0:
+        non_word_invs.append(match[0])
+    else:
+        non_word_invs.append('')
+
 non_words = [f'{mne_evo_out}/{f}' for f in non_words]
-
 #%% run the first one
+[[os.path.basename(f).split('_')[0], s.split('_')[0], os.path.basename(p).split('_')[0]] for f, s, p in zip(words, wordfs, word_invs)]
 
+#%%
 non_word_src = red_inv.invert_multiple(evokedfs=words,
-                                       invfs=words_invs,
-                                       lambda2 = 1. / 9.,
-                                       method='dSPM',
+                                       invfs=word_invs,
+                                       lambda2 = 3,
+                                       method='MNE',
                                        morph=True,
                                        fsdir=fs_sub_dir,
                                        fssub=wordfs,
@@ -348,14 +412,14 @@ non_word_src = red_inv.invert_multiple(evokedfs=words,
                                        njobs=1)
 #%% Now the second one
 non_word_src = red_inv.invert_multiple(evokedfs=non_words,
-                                       invfs=non_words_invs,
-                                       lambda2 = 1. / 9.,
-                                       method='dSPM',
+                                       invfs=non_word_invs,
+                                       lambda2 = 3,
+                                       method='MNE',
                                        morph=True,
                                        fsdir=fs_sub_dir,
                                        fssub=non_wordfs,
                                        outdir='/imaging/ai05/phono_oddball/mne_ev_src',
-                                       njobs=1)
+                                       njobs=10)
 
 
 #%% get average of each for just looking at
@@ -383,9 +447,54 @@ est.plot(backend='matplotlib', initial_time=time_max,
 
 #%% read and create big matrix
 inw = [f[0] for f in inWord]
-innw = [f[0] for f in inWord]
+innw = [f[0] for f in inNword]
 X = red_group.src_concat_mat([inw, innw], 'fsaverage')
 
+#%% plot an average
+import numpy as np
+import matplotlib.pyplot as plt
+
+# read in dummy stc
+stc = mne.read_source_estimate(inw[0][0:-7], 'fsaverage')
+# replace it's data with an average
+#stc.data = np.average(np.abs(X[:,:,:,0]) - np.abs(X[:,:,:,1]), axis=2)
+stc.data = np.average(X[:,:,:,0], axis=2)
+#stc.data = (X[:,:,1,0] - X[:,:,1,1])
+
+#%%plot
+stc.plot(backend='matplotlib', initial_time=0.75,
+         smoothing_steps=5).savefig('/home/ai05/test_SPM.png')
+#%% generate label then plot activity
+for i in range(X.shape[2]):
+    print(i)
+    stc.data = (X[:,:,i,0])
+
+    #stc = mne.read_source_estimate(inw[11][0:-7], 'fsaverage')
+    #stc.data = np.average(X[:,:,:,0], axis=2)
+
+    src_fname = '/imaging/ai05/phono_oddball/mne_source_models/fsaverage-ico5-src.fif'
+    src = mne.read_source_spaces(src_fname)
+    aparc_label_name = 'bankssts-lh'
+    tmin, tmax = 0.0, 1.0
+    stc_mean = stc.copy().crop(tmin, tmax).mean()
+    label = mne.read_labels_from_annot('fsaverage', parc='aparc',
+                                       subjects_dir=fs_sub_dir,
+                                       regexp=aparc_label_name)[0]
+    stc_mean_label = stc_mean.in_label(label)
+    data = np.abs(stc_mean_label.data)
+    stc_mean_label.data[data < 0.6 * np.max(data)] = 0.
+    func_labels, _ = mne.stc_to_label(stc_mean_label, src=src, smooth=True,
+                                      subjects_dir=fs_sub_dir, connected=True,
+                                      verbose='error')
+    func_label = func_labels[0]
+    stc_func_label = stc.in_label(func_label)
+    pca_func = stc.extract_label_time_course(func_label, src, mode='pca_flip')[0]
+    pca_func *= np.sign(pca_func[np.argmax(np.abs(pca_func))])
+    plt.plot(1e3 * stc_func_label.times, pca_func, 'b',
+             label='Functional %s' % aparc_label_name)
+
+plt.savefig(f'/home/ai05/time_SPM.png')
+# Cool, if this looks sensible then continue with cluster perms below
 #%% do manually
 import mne
 import numpy as np
@@ -431,7 +540,7 @@ fsave_vertices = [s['vertno'] for s in src]
 connectivity = mne.spatial_src_connectivity(src)
 
 X = np.abs(X)
-X_con = X[:, :, :, 0] - X[:, :, :, 1] # paired contrast
+X_con = X[:, :, :, 0] #- X[:, :, :, 1] # paired contrast
 
 
 
@@ -442,20 +551,20 @@ np.save(f'{mne_save_dir}/group_summary.npy', X_con)
 # set parallel things
 mne.set_memmap_min_size('1M')
 mne.set_cache_dir('/tmp')
-
+#%%
 #    Now let's actually do the clustering. This can take a long time...
 #    Here we set the threshold quite high to reduce computation.
-p_threshold = 0.05
-#t_threshold = -stats.distributions.t.ppf(p_threshold / 2., 70 - 1)
-t_threshold = 1.5
+p_threshold = 0.01
+t_threshold = -stats.distributions.t.ppf(p_threshold / 2., 70 - 1)
+#t_threshold = 1.5
 print('Clustering.')
 T_obs, clusters, cluster_p_values, H0 = clu = \
     spatio_temporal_cluster_1samp_test(X_con, connectivity=connectivity, n_jobs=10,
-                                       threshold=t_threshold, buffer_size=500,
-                                       verbose=True)
+                                       threshold=t_threshold,
+                                       verbose=True, n_permutations=1000, buffer_size=500)
 #    Now select the clusters that are sig. at p < 0.05 (note that this value
 #    is multiple-comparisons corrected).
-good_cluster_inds = np.where(cluster_p_values < 0.05)[0]
+good_cluster_inds = np.where(cluster_p_values <= 0.05)[0]
 
 #%% submit to cluster
 
@@ -463,11 +572,19 @@ red_group.submit_cluster_perm(Xf = f'{mne_save_dir}/group_summary.npy',
                               srcf = src_fname,
                               jobs = 28,
                               buffer= 1000,
-                              t_thresh=1.5,
+                              t_thresh=2.5,
                               scriptpath='/home/ai05',
                               pythonpath='/home/ai05/anaconda3/envs/mne/bin/python',
                               outpath='/imaging/ai05/phono_oddball'
                              )
+#%% visualise
+
+#    Now let's build a convenient representation of each cluster, where each
+#    cluster becomes a "time point" in the SourceEstimate
+stc_all_cluster_vis = summarize_clusters_stc(clu, tstep=est.tstep,
+                                             vertices=fsave_vertices,
+                                             subject='fsaverage')
+
 
 #%% rename some bits
 allevo = os.listdir(mne_evo_out)

@@ -4,7 +4,7 @@ import numpy as np
 import joblib
 
 
-def setup_src_multiple(sublist, fs_sub_dir, outdir, spacing, surface, n_jobs1, n_jobs2):
+def setup_src_multiple(sublist, fs_sub_dir, outdir, spacing, surface, src_mode,n_jobs1, n_jobs2):
 
     """
     :param sub:
@@ -32,17 +32,17 @@ def setup_src_multiple(sublist, fs_sub_dir, outdir, spacing, surface, n_jobs1, n
 
     if n_jobs1 == 1:
         for i in range(len(sublist)):
-            savedfile = __setup_src_individual(sublist[i], fs_sub_dir, outdir, spacing, surface, n_jobs2)
+            savedfile = __setup_src_individual(sublist[i], fs_sub_dir, outdir, spacing, surface, src_mode,n_jobs2)
             saved_files.append(savedfile)
     if n_jobs1 > 1:
 
         saved_files = joblib.Parallel(n_jobs =n_jobs1)(
-            joblib.delayed(__setup_src_individual)(thisS, fs_sub_dir, outdir, spacing, surface, n_jobs2) for thisS in sublist)
+            joblib.delayed(__setup_src_individual)(thisS, fs_sub_dir, outdir, spacing, surface,src_mode, n_jobs2) for thisS in sublist)
 
     return saved_files
 
 
-def __setup_src_individual(sub, fs_sub_dir, outdir, spacing, surface, njobs):
+def __setup_src_individual(sub, fs_sub_dir, outdir, spacing, surface, src_mode, njobs):
     """
     :param sub:
         subject to set up source-space on
@@ -57,20 +57,31 @@ def __setup_src_individual(sub, fs_sub_dir, outdir, spacing, surface, njobs):
     :return:
     """
     # check if already exists.
-    fname = outdir + '/' + sub + '_' + surface + '-' + spacing + '-src.fif'
+    fname = outdir + '/' + sub + '_' + surface + '-' + spacing +  '-' + src_mode + '-src.fif'
     if os.path.isfile(fname):
         print(fname + ' already exists')
         return fname
     try:
-        src_space = mne.setup_source_space(sub, spacing=spacing, surface=surface, subjects_dir=fs_sub_dir, n_jobs=njobs)
+        if src_mode == 'cortical':
+            src_space = mne.setup_source_space(sub, spacing=spacing, surface=surface, subjects_dir=fs_sub_dir, n_jobs=njobs)
+        elif src_mode == 'volume':
+            src_space = mne.setup_volume_source_space(sub, subjects_dir=fs_sub_dir)
 
+        else:
+            print(src_mode + ' is not a valid source space')
+            return ''
         mne.write_source_spaces(fname, src_space)  # write to source dir
         this_sub_dir = fname
-    except OSError:
+
+     except Exception as e:
         print('something went wrong with setup, skipping ' + sub)
+        print(e)
         return ''
 
     return this_sub_dir
+
+
+
 
 def make_bem_multiple(sublist, fs_sub_dir, outdir, single_layers, n_jobs1):
 

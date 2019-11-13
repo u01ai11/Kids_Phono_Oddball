@@ -216,10 +216,10 @@ def __evoked_individual(file, outdir, keys, contlist, contlist2, overwrite):
 
     # check if output file(s) exist, if not overwrite then skip and return path
     # TODO: this will only check for main average file, might be some situations we want to check all
-    if os.path.isfile(f'{outdir}/{num}_{f_only[2]}_ave.fif'):
+    if os.path.isfile(f'{outdir}/{num}_{f_only[1]}_ave.fif'):
         if not overwrite:
-            print(f'file for {num} run {f_only[2]} already exists, skipping to next')
-            save_file_path = f'{outdir}/{num}_{f_only[2]}_ave.fif'
+            print(f'file for {num} run {f_only[1]} already exists, skipping to next')
+            save_file_path = f'{outdir}/{num}_{f_only[1]}_ave.fif'
             return save_file_path
 
     # this will be a list of fnames

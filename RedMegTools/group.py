@@ -84,4 +84,4 @@ np.save('{outpath}/clus_results', clu)
     print(tcshf, file=open(f'{scriptpath}/batch_clustperm.csh', 'w'))
 
     # execute this on the cluster
-    os.system(f'sbatch --job-name=clusterfu --mincpus=28 -t 0-3:00 {scriptpath}/batch_clustperm.csh')
+    os.system(f'sbatch --job-name=clusterfu --mincpus=28 -t 0-8:00 {scriptpath}/batch_clustperm.csh')
