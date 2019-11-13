@@ -60,17 +60,17 @@ def __fwd_individual(raw, trans, src, bemsol, outdir):
     num = f_only[0]
 
     # check if file exists
-    if os.path.isfile(f'{outdir}/{num}-fwd.fif'):
+    if os.path.isfile(f'{outdir}/{num}-volume-fwd.fif'):
         print(f'{outdir}/{num}-fwd.fif exists already skipping' )
         return f'{outdir}/{num}-fwd.fif'
 
-    rawf = mne.io.read_raw_fif(raw, preload=False)
+    rawf = mne.io.read_raw_fif(raw, preload=True)
     srcf = mne.read_source_spaces(src)
     bemsolf = mne.read_bem_solution(bemsol)
     fwd = mne.make_forward_solution(rawf.info, trans, srcf, bemsolf)
-    mne.write_forward_solution(f'{outdir}/{num}-fwd.fif', fwd)
+    mne.write_forward_solution(f'{outdir}/{num}-volume-fwd.fif', fwd)
 
-    return f'{outdir}/{num}-fwd.fif'
+    return f'{outdir}/{num}-volume-fwd.fif'
 
 
 def cov_matrix_multiple_cluster(epochlist, method, rank, tmax, outdir, pythonpath, scriptpath):
@@ -213,16 +213,17 @@ def inv_op_multiple(infofs, fwdfs, covfs, loose, depth, outdir, njobs):
 
 def __inv_op_individual(infof, fwdf, covf, loose, depth, outdir):
 
-    parts = os.path.basename(infof).split('_')
+    parts = os.path.basename(covf).split('_')
     num = parts[0]
 
-    fname = f'{outdir}/{parts[0]}_{parts[1]}-inv.fif'
+    fname = f'{outdir}/{num}_{parts[1].split("-")[0]}-inv.fif'
 
     if os.path.isfile(fname):
         print(f'{fname} already exisits skipping')
         return fname
     try:
-        info = mne.io.read_raw_fif(infof, preload=False)
+        info = mne.io.read_raw_fif(infof, preload=True)
+        # pick magnetometers
         fwd = mne.read_forward_solution(fwdf)
         cov = mne.read_cov(covf)
 
@@ -260,7 +261,7 @@ def invert_multiple(evokedfs, invfs, lambda2, method, morph, fsdir, fssub, outdi
             saved_files.append(savedfile)
     if njobs > 1:
         saved_files = joblib.Parallel(n_jobs=njobs)(
-            joblib.delayed(__invert_individual())(e, i, lambda2, method, morph, fsdir, f, outdir) for (e, i, f) in zip(evokedfs, invfs, fssub))
+            joblib.delayed(__invert_individual)(e, i, lambda2, method, morph, fsdir, f, outdir) for e, i, f in zip(evokedfs, invfs, fssub))
 
     return saved_files
 
@@ -291,11 +292,12 @@ def __invert_individual(evoked, inv, lambda2, method, morph, fsdir, fssub, outdi
     try:
         evokedf = mne.read_evokeds(evoked)
         invf = mne.minimum_norm.read_inverse_operator(inv)
-        stc_mne = mne.minimum_norm.apply_inverse(evokedf[0], invf, lambda2=lambda2, method=method)
+        # pick only mags
+        stc_mne = mne.minimum_norm.apply_inverse(invf[0], invf, lambda2=lambda2, method=method)
 
         if morph:
-            stc_morph = mne.morph_data(fssub, 'fsaverage', stc_mne, subjects_dir=fsdir)
-            stc_mne = stc_morph
+            stc_morph = mne.compute_source_morph(stc_mne, subject_from=fssub,subject_to='fsaverage', subjects_dir=fsdir)
+            stc_mne = stc_morph.apply(stc_mne)
 
         stc_mne.save(fname)
         return fname
@@ -304,3 +306,49 @@ def __invert_individual(evoked, inv, lambda2, method, morph, fsdir, fssub, outdi
         print(e)
         return fname
 
+def lcmv_multiple(epoch_list, evoked_list, forward_list, fs_sub_dir,scriptpath, pythonpath, outpath):
+
+
+    for i in range(len(epoch_list)):
+        pycom = f"""
+import sys
+sys.path.insert(0, '/home/ai05/Kids_Phono_Oddball')
+import os 
+import mne 
+
+fname = os.path.basename('{evoked_list[i]}').split('.')[0] + '-lcmv')
+
+epoch =  mne.read_epochs('{epoch_list[i]}')
+ev = mne.read_evokeds('{evoked_list[i]}')
+fwd = mne.read_forward_solution('{forward_list[i]}')
+
+noise_cov = mne.compute_covariance(epoch, tmin=-3, tmax=0, method='empirical',
+                               rank=None)
+data_cov = mne.compute_covariance(epoch, tmin=0.00, tmax=0.8,
+                              method='empirical', rank=None)
+                              
+filters = mne.beamformer.make_lcmv(ev[0].info, fwd, data_cov, reg=0.05,
+                noise_cov=noise_cov, pick_ori='max-power',
+                weight_norm='nai', rank=None)
+stc = mne.beamformer.apply_lcmv(ev[0], filters, max_ori_out='signed')
+fssub = os.path.basename(fwd['info']['mri_file']).split('-')[0]
+stc_morph = mne.compute_source_morph(stc, subject_from=fssub,subject_to='fsaverage', subjects_dir='{fs_sub_dir}')
+stc = stc_morph.apply(stc)
+stc.save('{outpath}'+'/'fname)
+stc.plot(
+    src=fwd['src'], subjects_dir=fs_sub_dir, mode='stat_map',
+    initial_time=0.7, verbose=True).savefig('/home/ai05/vol{str(i)}.png')
+            """
+
+        # save to file
+        print(pycom, file=open(f'{scriptpath}/batch_lcmv.py', 'w'))
+
+        # construct csh file
+        tcshf = f"""#!/bin/tcsh
+            {pythonpath} {scriptpath}/batch_lcmv.py
+                    """
+        # save to directory
+        print(tcshf, file=open(f'{scriptpath}/batch_lcmv.csh', 'w'))
+
+        # execute this on the cluster
+        os.system(f'sbatch --job-name=lcmv_{str(i)} --mincpus=5 -t 0-8:00 {scriptpath}/batch_lcmv.csh')

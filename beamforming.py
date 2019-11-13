@@ -69,6 +69,17 @@ stc.plot(
     clim=dict(kind='value', pos_lims=lims), mode='stat_map',
     initial_time=0.7, verbose=True).savefig('/home/ai05/voltest.png')
 #%%
+
+#do it all
+
+red_inv.lcmv_multiple(epoch_list=[f'{mne_epo_out}/{f}' for f in epochs],
+                      evoked_list=[f'{mne_evo_out}/{f}' for f in words],
+                      forward_list=[f'{mne_src_dir}/{f}' for f in fwds],
+                      fs_sub_dir=fs_sub_dir,
+                      scriptpath='/home/ai05/clusterscripts',
+                      pythonpath='/home/ai05/anaconda3/envs/mne_2/bin/python',
+                      outpath='/imaging/ai05/phono_oddball/mne_ev_src')
+#%%
 #check matches
 nonmatches = [w.split('_')[0] != n.split('_')[0] for (w, n) in zip(words, non_words)]
 print('are there any non-matching entries:')

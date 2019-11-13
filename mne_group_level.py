@@ -254,7 +254,7 @@ cov_files = red_inv.cov_matrix_multiple_cluster(epochlist=allepo,
                                                 rank=None,
                                                 tmax=0,
                                                 outdir='/imaging/ai05/phono_oddball/mne_cov_run',
-                                                pythonpath='/home/ai05/anaconda3/envs/mne/bin/python',
+                                                pythonpath='/home/ai05/anaconda3/envs/mne_2/bin/python',
                                                 scriptpath='/home/ai05/clusterscripts'
                                                 )
 #%%
