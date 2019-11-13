@@ -334,7 +334,7 @@ stc = mne.beamformer.apply_lcmv(ev[0], filters, max_ori_out='signed')
 fssub = os.path.basename(fwd['info']['mri_file']).split('-')[0]
 stc_morph = mne.compute_source_morph(stc, subject_from=fssub,subject_to='fsaverage', subjects_dir='{fs_sub_dir}')
 stc = stc_morph.apply(stc)
-stc.save('{outpath}'+'/'fname)
+stc.save('{outpath}'+'/'+fname)
 stc.plot(
     src=fwd['src'], subjects_dir=fs_sub_dir, mode='stat_map',
     initial_time=0.7, verbose=True).savefig('/home/ai05/vol{str(i)}.png')
