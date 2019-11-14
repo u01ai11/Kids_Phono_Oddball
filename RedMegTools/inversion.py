@@ -341,7 +341,7 @@ stc.plot(
             """
 
         # save to file
-        print(pycom, file=open(f'{scriptpath}/batch_lcmv{}.py', 'w'))
+        print(pycom, file=open(f'{scriptpath}/batch_lcmv{str(i)}.py', 'w'))
 
         # construct csh file
         tcshf = f"""#!/bin/tcsh
