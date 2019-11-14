@@ -70,10 +70,9 @@ def __setup_src_individual(sub, fs_sub_dir, outdir, spacing, surface, src_mode, 
         else:
             print(src_mode + ' is not a valid source space')
             return ''
-        mne.write_source_spaces(fname, src_space)  # write to source dir
+        mne.write_source_spaces(fname, src_space)  # write to
         this_sub_dir = fname
-
-     except Exception as e:
+    except Exception as e:
         print('something went wrong with setup, skipping ' + sub)
         print(e)
         return ''
