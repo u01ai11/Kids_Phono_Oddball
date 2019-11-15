@@ -293,7 +293,7 @@ def __invert_individual(evoked, inv, lambda2, method, morph, fsdir, fssub, outdi
         evokedf = mne.read_evokeds(evoked)
         invf = mne.minimum_norm.read_inverse_operator(inv)
         # pick only mags
-        stc_mne = mne.minimum_norm.apply_inverse(invf[0], invf, lambda2=lambda2, method=method)
+        stc_mne = mne.minimum_norm.apply_inverse(evokedf[0], invf, lambda2=lambda2, method=method)
 
         if morph:
             stc_morph = mne.compute_source_morph(stc_mne, subject_from=fssub,subject_to='fsaverage', subjects_dir=fsdir)

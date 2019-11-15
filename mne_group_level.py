@@ -90,9 +90,9 @@ saved_epoch_list = red_epoch.epoch_multiple(flist=filtered_in,
                                             keys=keys,
                                             trigchan=trigchan,
                                             backup_trigchan=backup_trigchan,
-                                            times=[-0.3, 0.8],
+                                            times=[-0.3, 1.0],
                                             overwrite=True,
-                                            njobs=32)
+                                            njobs=17)
 
 #%% merge those epochs
 epo_base = [os.path.basename(f) for f in saved_epoch_list]
@@ -112,9 +112,9 @@ def merge_epo(num, mne_epo_out, saved_epoch_list):
         epo = mne.read_epochs(file)
         merge_l.append(epo)
     merged = mne.epochs.concatenate_epochs(merge_l)
-    merged.save(f'{mne_epo_out}/{num}_concat_epo.fif')
+    merged.save(f'{mne_epo_out}/{num}_concat_epo.fif', overwrite=True)
 
-joblib.Parallel(n_jobs=19)(
+joblib.Parallel(n_jobs=30)(
     joblib.delayed(merge_epo)(num, mne_epo_out, saved_epoch_list) for num in epo_nums)
 
 for num in epo_nums:
@@ -147,7 +147,7 @@ saved_evoked_list = red_epoch.evoked_multiple(flist=flist,
                                               keys=keys,
                                               contlist=contlist,
                                               contlist2=contlist2,
-                                              overwrite=False,
+                                              overwrite=True,
                                               njobs=32)
 
 #%% FREESURFER RECON
@@ -180,6 +180,7 @@ fs_recon_list = red_sourcespace_cmd.fs_bem_multiple(sublist=fs_dir_subs,
 
 #%% setup sourcespace in MNE format
 mne_src_dir = '/imaging/ai05/phono_oddball/mne_source_models'
+fs_dir_all = os.listdir(fs_sub_dir)
 
 # select only the scaled and coregister versions
 #  use only scales or avscaled fnames
@@ -190,7 +191,7 @@ mne_src_files = red_sourcespace_setup.setup_src_multiple(sublist=fs_scaled,
                                                          outdir=mne_src_dir,
                                                          spacing='oct6',
                                                          surface='white',
-                                                         src_mode='volume',
+                                                         src_mode='cortical',
                                                          n_jobs1=12,
                                                          n_jobs2=1)
 #%% BEM MNE input stuff
@@ -273,6 +274,7 @@ inraw, infwd, incov = [],  [], []
 allrs = [f for f in os.listdir(rawdir) if os.path.isfile(rawdir+'/'+f)]
 allrs = [f for f in allrs if '_1_' in f]
 allss = [f for f in os.listdir(mne_src_dir) if os.path.isfile(mne_src_dir+'/'+f)]
+allss = [f for f in allss if 'volume' not in f]
 allcov = [f for f in os.listdir('/imaging/ai05/phono_oddball/mne_cov_run')]
 # get list of raws
 for id in ids:
@@ -333,7 +335,7 @@ fname_inv = red_inv.inv_op_multiple(infofs=inraw,
                                     loose=0.2,
                                     depth=0.8,
                                     outdir=mne_src_dir,
-                                    njobs=10)
+                                    njobs=15)
 
 #%% check the files
 evoked =[mne_evo_out+'/'+f for f in os.listdir(mne_evo_out) if 'MNN_ave' in f]
@@ -401,25 +403,25 @@ non_words = [f'{mne_evo_out}/{f}' for f in non_words]
 [[os.path.basename(f).split('_')[0], s.split('_')[0], os.path.basename(p).split('_')[0]] for f, s, p in zip(words, wordfs, word_invs)]
 
 #%%
-non_word_src = red_inv.invert_multiple(evokedfs=words,
+word_src = red_inv.invert_multiple(evokedfs=words,
                                        invfs=word_invs,
                                        lambda2 = 3,
-                                       method='MNE',
+                                       method='dSPM',
                                        morph=True,
                                        fsdir=fs_sub_dir,
                                        fssub=wordfs,
                                        outdir='/imaging/ai05/phono_oddball/mne_ev_src',
-                                       njobs=1)
+                                       njobs=18)
 #%% Now the second one
 non_word_src = red_inv.invert_multiple(evokedfs=non_words,
                                        invfs=non_word_invs,
                                        lambda2 = 3,
-                                       method='MNE',
+                                       method='dSPM',
                                        morph=True,
                                        fsdir=fs_sub_dir,
                                        fssub=non_wordfs,
                                        outdir='/imaging/ai05/phono_oddball/mne_ev_src',
-                                       njobs=10)
+                                       njobs=18)
 
 
 #%% get average of each for just looking at
@@ -457,12 +459,12 @@ import matplotlib.pyplot as plt
 # read in dummy stc
 stc = mne.read_source_estimate(inw[0][0:-7], 'fsaverage')
 # replace it's data with an average
-#stc.data = np.average(np.abs(X[:,:,:,0]) - np.abs(X[:,:,:,1]), axis=2)
-stc.data = np.average(X[:,:,:,0], axis=2)
+stc.data = np.average(np.abs(X[:,:,:,0]) - np.abs(X[:,:,:,1]), axis=2)
+#stc.data = np.average(X[:,:,:,0], axis=2)
 #stc.data = (X[:,:,1,0] - X[:,:,1,1])
 
 #%%plot
-stc.plot(backend='matplotlib', initial_time=0.75,
+stc.plot(backend='matplotlib', initial_time=0.4,
          smoothing_steps=5).savefig('/home/ai05/test_SPM.png')
 #%% generate label then plot activity
 for i in range(X.shape[2]):
