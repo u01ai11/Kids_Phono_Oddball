@@ -7,6 +7,8 @@ import RedMegTools.sourcespace_setup as red_sourcespace_setup
 import RedMegTools.utils as red_utils
 import RedMegTools.inversion as red_inv
 import RedMegTools.group as red_group
+sys.path.insert(0, '/home/ai05/Downloads/glm')
+import glmtools
 import os
 import collections
 import mne
@@ -16,6 +18,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import pandas as pd
 import scipy
+from collections import namedtuple
+import copy
 # pointers to our directories
 rawdir = '/imaging/ai05/phono_oddball/aligned_raws'  # raw fifs to input
 mne_save_dir = '/imaging/ai05/phono_oddball/mne_files'  # where to save MNE MEG files
@@ -179,13 +183,13 @@ for i_clu, clu_idx in enumerate(good_cluster_inds):
 #%% do thesame but with a custom function for the statistics
 # make dummy epochs object with group level data
 # each epoch = 1 participant's difference
-X_diff = X[0] - X[1]
-
+X_diff = X[0]
 # as we are doing a behaviour covariate regression exclude data we have no covariate for
 facts = pd.read_csv('/imaging/ai05/phono_oddball/ref_data/components_MNE.csv')
 facts = facts.to_numpy()
 
-WMfact = [f[5] for f in facts]
+WMfact = [f[1] for f in facts]
+
 X_in = np.empty((len([f for f in WMfact if not np.isnan(f)]), X_diff.shape[1], X_diff.shape[2]))
 cnt = 0
 for i in range(len(WMfact)):
@@ -221,8 +225,10 @@ for i in range(len(chan_names)):
     if drop_mask[i] == True:
         pickchans.append(chan_names[i])
 epoch.pick(pickchans)
+
+
 #%%
-names = ['Intercept', 'Education fact']
+names = ['Intercept', 'WM Fact-Word']
 # Now run the linear regression
 res = mne.stats.linear_regression(epoch, design_mat, names)
 
@@ -234,45 +240,143 @@ for name in names:
     reject_H0, fdr_pvals = mne.stats.fdr_correction(res[name].p_val.data)
     evoked = res[name].beta
     evoked.plot_image(mask=reject_H0, time_unit='s').savefig('/home/ai05/reg_p_vals' + name + '.png')
-#%%
+#%% Try this also by summing across sensors for each
+
+drop_mask = [f[0] for f in reg_masks[0]]
+# use sensor mask to get sensor names
+chan_names = epoch.info['ch_names']
+# get array with just cluster channels
+X_cluster = X_in[:,:,drop_mask]
+#X_cluster =
+#gfp
+X_gfp = np.std(np.mean(X_cluster, 2),0)
+#mean
+X_mean = np.mean(X_cluster, (0,2))
+#std
+X_std = np.std(X_cluster, (0,2))
+
+fig, ax = plt.subplots(1, 2, figsize=(10, 3))
+ax[0].plot(np.transpose(X_mean))
+ax[0].plot(np.transpose(X_std))
+ax[0].set_title( 'Mean')
+
+ax[1].plot(X_gfp)
+ax[1].set_title( 'gfp')
+fig.savefig('/home/ai05/av.png')
+
+X_group_mean = np.mean(X_cluster, 2)
+
+#%% Use internal function '_fit_lm' to run OLS straight on our matrix
+#names = ['Intercept', 'Education fact']
+
+lm_params = mne.stats.regression._fit_lm(X_group_mean, design_mat, names)
+lm = namedtuple('lm', 'beta stderr t_val p_val mlog10_p_val')
+labels = ['beta', 'stderr', 't_val', 'p_val', 'mlog_10_p_val']
+
+#plot the betas
+fig, ax = plt.subplots(len(names),1, figsize=(10, 3))
+
+for i, name in enumerate(names):
+    ax[i].plot(lm_params[0][name])
+    ax[i].set_title(name + ' beta weights')
+
+fig.savefig('/home/ai05/lm_clusteraverage_betas.png')
+fig, ax = plt.subplots(len(names),1, figsize=(10, 3))
+for i, name in enumerate(names):
+    p_vals = lm_params[3][name]
+    reject_H0, corr_p = mne.stats.fdr_correction(p_vals)
+    ax[i].plot(corr_p)
+    ax[i].set_title(name + ' p_vals')
+
+fig.savefig('/home/ai05/lm_clusteraverage_ps.png')
+
+plt.close('all')
+
+# # output is length of 5: beta, stderr, t_val, p_val and mlog10_p_val
+# for i, item in enumerate(['beta', 'stderr', 't_val', 'p_val', 'mlog_10_p_val']):
+#
+
+
+#%% Ite let's try this using Quinn's glmtools library
+import glmtools
+"""
+- Create a data matrix containing each participants MMN [ participants x time x voxel ]
+- Add behavioural score to the data.info dict
+- Create a design with two regressors
+    first is a constant (mean-term)
+    second is a parametric regressor containing the z-transformed behavioural score.
+    
+The fitted GLM will return a [2 x time x voxel] matrix in which [0,:,:] contains the mean MMN and [1,:,:,] contains the covariance between behavioural score and the MMN across participants.
+
+"""
+
+# select data -- MNN or difference
+X_diff = X[0] # word
+# as we are doing a behaviour covariate regression exclude data we have no covariate for
+facts = pd.read_csv('/imaging/ai05/phono_oddball/ref_data/components_MNE.csv')
+facts = facts.to_numpy()
+
+behav = [f[7] for f in facts]
+behav_name = 'Maths'
+X_in = np.empty((len([f for f in behav if not np.isnan(f)]), X_diff.shape[1], X_diff.shape[2]))
+cnt = 0
+for i in range(len(behav)):
+    if not np.isnan(behav[i]):
+        X_in[cnt, :, :] = X_diff[i, :,:]
+        cnt += 1
+
+behav = [f for f in behav if not np.isnan(f)]
+
+
+# load in data to GLM data struture
+dat = glmtools.data.TrialGLMData(data=X_in, dim_labels=['participants', 'time', 'channels'])
+
+# add regressors
+regs = list()
+regs.append(glmtools.regressors.ConstantRegressor(num_observations=X_in.shape[0]))
+regs.append(glmtools.regressors.ParametricRegressor(values=behav,
+                                                    name=behav_name,
+                                                    preproc='z',
+                                                    num_observations=X_in.shape[0]))
+# add covariate to info
+dat.info[behav_name] = behav
+
+# contrasts
+
+contrasts = [glmtools.design.Contrast(name='Intercept',values=[1,0])]
+contrasts.append(glmtools.design.Contrast(name=behav_name,values=[0,1]))
+
+des = glmtools.design.GLMDesign.initialise(regs,contrasts)
+for f in des.regressor_list:
+    f.rtype = 'Parametric'
+
+model = glmtools.fit.OLSModel( des, dat )
 
 #%%
-# the spatio temporal cluster_permutation function feeds in a flattened array
-# we need to get this data into a format where we can do a regression
-# for each cluster the test gets input:
-# participant x conditions x timepoints
-def stat_fun(*args):
-    """
-    :param args:
-    :return:
-    """
+model_perm = glmtools.permutations.permute_glm(des, dat, nperms=20, nomax_axis=1)
+"""
+sort by permutation axis for each timepoint, 
+take 2.5 and 97.5 percentile (top and bottom of sorted list) (t-values/copes beyond which) 
+"""
 
-    #X_diff = X[0] - X[1]
+#%% put the copes / betas into an evoked object
 
-    # as we are doing a behaviour covariate regression exclude data we have no covariate for
-    facts = pd.read_csv('/imaging/ai05/phono_oddball/ref_data/components_MNE.csv')
-    facts = facts.to_numpy()
+dum_ev_int = mne.EvokedArray(np.transpose(model.copes[0,:,:]), info=words_e[0].info, tmin=-0.3,
+                        nave=len(behav))
 
-    WMfact = [f[0] for f in facts]
-    X_in = np.empty((len([f for f in WMfact if not np.isnan(f)]), X_diff.shape[1], X_diff.shape[2]))
-    cnt = 0
-    for i in range(len(WMfact)):
-        if not np.isnan(WMfact[i]):
-            X_in[cnt, :, :] = X_diff[i, :, :]
-            cnt += 1
+dum_ev_reg = mne.EvokedArray(np.transpose(model.copes[1,:,:]), info=words_e[0].info, tmin=-0.3,
+                        nave=len(behav))
 
-    WMfact_clean = [f for f in WMfact if not np.isnan(f)]
+dum_ev_int.plot_joint(picks=pickchans).savefig('/home/ai05/glm_intercept_cope.png')
+dum_ev_reg.plot_joint(picks=pickchans).savefig(f'/home/ai05/glm_{behav_name}_cope.png')
 
-    epoch = mne.read_epochs(mne_epo_out + '/' + os.listdir(mne_epo_out)[0])
-    epoch.pick('mag')
-    epoch.event_id = {'MNN Difference': 1}
-    epoch._data = np.transpose(X_in, (0, 2, 1))
+#%%
 
-    time = 300
-    epoch.events = epoch.events[0:len(X_in)]
-    for i in range(len(X_in)):
-        epoch.events[i] = [time, 0, 1]
-        time += 1100
+dum_ev_int = mne.EvokedArray(np.transpose(model.betas[0,:,:]), info=words_e[0].info, tmin=-0.3,
+                        nave=len(behav))
 
-    # design matrix
-    design_mat = np.transpose(np.array(([1] * len(epoch), WMfact_clean)))
+dum_ev_reg = mne.EvokedArray(np.transpose(model.betas[1,:,:]), info=words_e[0].info, tmin=-0.3,
+                        nave=len(behav))
+
+dum_ev_int.plot_joint(picks=).savefig('/home/ai05/glm_intercept_betas.png')
+dum_ev_reg.plot_joint().savefig(f'/home/ai05/glm_{behav_name}_betas.png')
