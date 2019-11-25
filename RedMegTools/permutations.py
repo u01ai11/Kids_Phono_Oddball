@@ -79,8 +79,8 @@ def permute_glm( glmdes, data, nperms=5000, stat='cope',nomax_axis=None,
 
     return nulls
 
-def permute_glm_cluster( glmdes, data, nperms=5000, stat='cope',nomax_axis=None,
-        temporal_varcope_smoothing=None, scriptdir, pythondir, filesdir):
+def permute_glm_cluster( glmdes, data, scriptdir, pythondir, filesdir, nperms=5000, stat='cope',
+                         nomax_axis=None, temporal_varcope_smoothing=None):
     """
     :param glmdes: Design matrix
     :param data: Data
@@ -208,19 +208,19 @@ np.save('{filesdir}/{jj}_{ii}.npy', out)
             # execute this on the cluster
             os.system(f'sbatch --job-name=alex_perm_465 --mincpus=1 -t 0-8:00 {scriptdir}/batch_perm.csh')
 
-            os.system()
-
 
     # wait until all permutations are done
     starttime = time.time()
 
     #update every second and continue when finished
     completed = False
-    while ~completed:
+    while completed == False:
         queued = len(os.popen('squeue -n alex_perm_465').read().split('\n'))-2
         perc_done = 1-(queued/((nperms-1) * glmdes.num_contrasts))
 
-        if perc_done == 1:
+        sys.stdout.write("\rClustering %i percent" % float(perc_done*100))
+        sys.stdout.flush()
+        if perc_done == 1.0:
             completed = True
         time.sleep(1.0 - ((time.time() - starttime) % 1.0))
 

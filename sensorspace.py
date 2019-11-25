@@ -377,8 +377,11 @@ for i in range(regmat.shape[0]):
 for f in des.regressor_list:
     f.rtype = 'Parametric'
 permuted = red_perm.permute_glm(des, dat, nperms=100, stat='cope',nomax_axis=None)
-
-
+# %% Try the cluster one
+permuted = red_perm.permute_glm_cluster(des, dat, nperms=100, stat='cope',nomax_axis=None,
+                                        scriptdir='/imaging/ai05/phono_oddball/cluster_scripts',
+                                        pythondir='/home/ai05/.conda/envs/mne_2/bin/python',
+                                        filesdir='/imaging/ai05/phono_oddball/cluster_files')
  #%%
 """
 output from perm 
