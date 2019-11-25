@@ -146,22 +146,16 @@ def permute_glm_cluster( glmdes, data, scriptdir, pythondir, filesdir, nperms=50
         with open(f'{filesdir}/temp_info.pkl', "wb") as f:
             pickle.dump(saveobject, f)
 
-        print('Permuting {0} by {1}'.format(glmdes.contrast_list[jj],mode))
-        for ii in range(1,nperms):
-            # copy and rename resources
-            os.system(f'cp {filesdir}/temp_info.pkl {filesdir}/temp_info_{jj}{ii}.pkl')
-            # template script for looping over
-            pycom = f"""
+
+        # make function for this contrast, taking only ii as input argument
+        pycom = f"""
 import sys
 sys.path.insert(0, '/home/ai05/Downloads/glm')
 import numpy as np
 from glmtools import fit,regressors
 import pickle
 
-with open('{filesdir}/temp_info_{jj}{ii}.pkl', "rb") as f:
-    saveobject = pickle.load(f)
 
-g, x, cinds, glmdes, data = saveobject
 
 def apply_permutation( X, cinds, mode ):
 
@@ -175,9 +169,18 @@ def apply_permutation( X, cinds, mode ):
 
     return X
 
+# prefefined stuff 
+
+ii = sys.argv[0] # input number from SLURM array 
 jj = {jj}
 mode = '{mode}'
 stat = '{stat}'
+
+#data from files 
+with open('{filesdir}/temp_info_{jj}'+str(ii)+'.pkl', "rb") as f:
+    saveobject = pickle.load(f)
+g, x, cinds, glmdes, data = saveobject
+
 
 g.design_matrix = apply_permutation( x.copy(), cinds[jj], mode )
 f = fit.OLSModel( g, data )
@@ -193,23 +196,32 @@ else:
 
 # save array 
 print('saving file')
-np.save('{filesdir}/{jj}_{ii}.npy', out)
+np.save('{filesdir}/{jj}_'+str(ii)+'.npy', out)
 print('file save complete')
 """
+        print(pycom, file=open(f'{scriptdir}/batch_perm_{jj}.py', 'w'))
+        # make required files
+        print('Permuting {0} by {1}'.format(glmdes.contrast_list[jj],mode))
+        for ii in range(1,nperms):
+            # copy and rename resources
+            os.system(f'cp {filesdir}/temp_info.pkl {filesdir}/temp_info_{jj}{ii}.pkl')
+            # template script for looping over
 
-            # submit cluster job
-            # save to file
-            print(pycom, file=open(f'{scriptdir}/batch_perm_{jj}_{ii}.py', 'w'))
 
-            # construct csh file
-            tcshf = f"""#!/bin/tcsh
-                 {pythondir} {scriptdir}/batch_perm_{jj}_{ii}.py
-                         """
-            # save to directory
-            print(tcshf, file=open(f'{scriptdir}/batch_perm_{jj}_{ii}.csh', 'w'))
+        # construct sh file
+        shf = f"""#!/bin/bash
+#SBATCH -t 0-1:00
+#SBATCH --job-name=alex_perm_465
+#SBATCH --mincpus=1
+#SBATCH --out={jj}_{ii}_%j.out
+#SBATCH -a 1-{nperms}
+{pythondir} {scriptdir}/batch_perm_{jj}_{ii}.py -p $SLURM_ARRAY_TASK_ID
+              """
+        # save to directory
+        print(shf, file=open(f'{scriptdir}/batch_perm_{jj}.csh', 'w'))
 
-            # execute this on the cluster
-            os.system(f'sbatch --job-name=alex_perm_465 --mincpus=1 -t 0-1:00 --out={jj}_{ii}_%j.out {scriptdir}/batch_perm_{jj}_{ii}.csh')
+        # execute this on the cluster
+        os.system(f'sbatch {scriptdir}/batch_perm_{jj}.csh')
 
 
     # wait until all permutations are done
@@ -219,7 +231,7 @@ print('file save complete')
     completed = False
     while completed == False:
         queued = len(os.popen('squeue -n alex_perm_465').read().split('\n'))-2
-        perc_done = 1-(queued/((nperms-1) * glmdes.num_contrasts))
+        perc_done = 1-(queued/glmdes.num_contrasts)
 
         sys.stdout.write("\rClustering %i percent" % float(perc_done*100))
         sys.stdout.flush()
