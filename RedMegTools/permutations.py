@@ -175,8 +175,8 @@ def apply_permutation( X, cinds, mode ):
     return X
 
 jj = {jj}
-mode = {mode}
-stat = {stat}
+mode = '{mode}'
+stat = '{stat}'
 
 g.design_matrix = apply_permutation( x.copy(), cinds[jj], mode )
 f = fit.OLSModel( g, data )
@@ -188,25 +188,27 @@ elif stat=='tstat':
     tstats = f.get_tstats(temporal_varcope_smoothing=temporal_varcope_smoothing)
     out  = tstats[jj,...]
 else:
-    print('stat not recognised: please use stat=\'cope\' or stat=\'tstat\'')
+    print('stat not recognised: please use stat=cope or stat=tstat')
 
 # save array 
+print('saving file')
 np.save('{filesdir}/{jj}_{ii}.npy', out)
+print('file save complete')
 """
 
             # submit cluster job
             # save to file
-            print(pycom, file=open(f'{scriptdir}/batch_perm.py', 'w'))
+            print(pycom, file=open(f'{scriptdir}/batch_perm_{jj}_{ii}.py', 'w'))
 
             # construct csh file
             tcshf = f"""#!/bin/tcsh
-                 {pythondir} {scriptdir}/batch_perm.py
+                 {pythondir} {scriptdir}/batch_perm_{jj}_{ii}.py
                          """
             # save to directory
-            print(tcshf, file=open(f'{scriptdir}/batch_perm.csh', 'w'))
+            print(tcshf, file=open(f'{scriptdir}/batch_perm_{jj}_{ii}.csh', 'w'))
 
             # execute this on the cluster
-            os.system(f'sbatch --job-name=alex_perm_465 --mincpus=1 -t 0-8:00 {scriptdir}/batch_perm.csh')
+            os.system(f'sbatch --job-name=alex_perm_465 --mincpus=1 -t 0-8:00 {scriptdir}/batch_perm_{jj}_{ii}.csh')
 
 
     # wait until all permutations are done
