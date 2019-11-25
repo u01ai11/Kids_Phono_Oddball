@@ -216,7 +216,7 @@ print('file save complete')
 #SBATCH --mincpus=1
 #SBATCH --out={jj}_%j.out
 #SBATCH -a 1-{nperms}
-{pythondir} {scriptdir}/batch_perm_{jj}.py -p $SLURM_ARRAY_TASK_ID
+{pythondir} {scriptdir}/batch_perm_{jj}.py $SLURM_ARRAY_TASK_ID
               """
         # save to directory
         print(shf, file=open(f'{scriptdir}/batch_perm_{jj}.csh', 'w'))
