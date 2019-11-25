@@ -10,7 +10,7 @@ from glmtools import fit,regressors
 import pickle
 import os
 import time
-
+import _pickle
 
 def permute_glm( glmdes, data, nperms=5000, stat='cope',nomax_axis=None,
         temporal_varcope_smoothing=None):
@@ -143,8 +143,8 @@ def permute_glm_cluster( glmdes, data, scriptdir, pythondir, filesdir, nperms=50
         # we now need to save g, x, glemdes, cinds and data
         saveobject = (g, x, cinds, glmdes, data)
         os.makedirs(os.path.dirname(filesdir), exist_ok=True)
-        with open(f'{filesdir}/temp_info.pkl', "wb") as f:
-            pickle.dump(saveobject, f)
+        with open(f'{filesdir}/temp_info_{jj}.pkl', "wb") as f:
+            _pickle.dump(saveobject, f)
 
 
         # make function for this contrast, taking only ii as input argument
@@ -154,7 +154,7 @@ sys.path.insert(0, '/home/ai05/Downloads/glm')
 import numpy as np
 from glmtools import fit,regressors
 import pickle
-
+import _pickle
 
 
 def apply_permutation( X, cinds, mode ):
@@ -177,8 +177,8 @@ mode = '{mode}'
 stat = '{stat}'
 
 #data from files 
-with open('{filesdir}/temp_info_{jj}'+str(ii)+'.pkl', "rb") as f:
-    saveobject = pickle.load(f)
+with open('{filesdir}/temp_info_{jj}.pkl', "rb") as f:
+    saveobject = _pickle.load(f)
 g, x, cinds, glmdes, data = saveobject
 
 
@@ -202,10 +202,11 @@ print('file save complete')
         print(pycom, file=open(f'{scriptdir}/batch_perm_{jj}.py', 'w'))
         # make required files
         print('Permuting {0} by {1}'.format(glmdes.contrast_list[jj],mode))
-        for ii in range(1,nperms):
-            # copy and rename resources
-            os.system(f'cp {filesdir}/temp_info.pkl {filesdir}/temp_info_{jj}{ii}.pkl')
-            # template script for looping over
+        # for ii in range(1,nperms):
+        #     # copy and rename resources
+        #     os.system(f'cp {filesdir}/temp_info.pkl {filesdir}/temp_info_{jj}{ii}.pkl')
+        #     # template script for looping over
+        #     print(ii)
 
 
         # construct sh file
