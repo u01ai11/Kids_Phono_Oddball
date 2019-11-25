@@ -171,7 +171,7 @@ def apply_permutation( X, cinds, mode ):
 
 # prefefined stuff 
 
-ii = sys.argv[0] # input number from SLURM array 
+ii = sys.argv[1] # input number from SLURM array 
 jj = {jj}
 mode = '{mode}'
 stat = '{stat}'
