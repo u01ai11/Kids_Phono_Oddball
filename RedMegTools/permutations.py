@@ -247,6 +247,7 @@ print('file save complete')
             #load
             infile = np.load(f'{filesdir}/{jj}_{ii}.npy')
             nulls[jj, ii] = infile
+            os.system(f'rm {filesdir}/{jj}_{ii}.npy') # delete
 
     #return this
     return nulls
