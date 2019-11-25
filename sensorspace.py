@@ -7,6 +7,7 @@ import RedMegTools.sourcespace_setup as red_sourcespace_setup
 import RedMegTools.utils as red_utils
 import RedMegTools.inversion as red_inv
 import RedMegTools.group as red_group
+import RedMegTools.permutations as red_perm
 sys.path.insert(0, '/home/ai05/Downloads/glm')
 import glmtools
 import os
@@ -101,9 +102,9 @@ for epolist in [words_e, non_words_e]:
 connectivity = mne.channels.find_ch_connectivity(words_e[0].info, ch_type='mag')
 threshold = 5.0  # very high, but the test is quite sensitive on this data
 # set family-wise p-value
-p_accept = 0.01
+p_accept = 0.05
 
-cluster_stats = mne.stats.spatio_temporal_cluster_test(X, n_permutations=1000,
+cluster_stats = mne.stats.spatio_temporal_cluster_test(X, n_permutations=100,
                                              threshold=threshold, tail=1,
                                              n_jobs=1, buffer_size=None,
                                              connectivity=connectivity[0])
@@ -188,7 +189,7 @@ X_diff = X[0]
 facts = pd.read_csv('/imaging/ai05/phono_oddball/ref_data/components_MNE.csv')
 facts = facts.to_numpy()
 
-WMfact = [f[1] for f in facts]
+WMfact = [f[2] for f in facts]
 
 X_in = np.empty((len([f for f in WMfact if not np.isnan(f)]), X_diff.shape[1], X_diff.shape[2]))
 cnt = 0
@@ -228,7 +229,7 @@ epoch.pick(pickchans)
 
 
 #%%
-names = ['Intercept', 'WM Fact-Word']
+names = ['Intercept', 'Factor IQ']
 # Now run the linear regression
 res = mne.stats.linear_regression(epoch, design_mat, names)
 
@@ -313,70 +314,215 @@ The fitted GLM will return a [2 x time x voxel] matrix in which [0,:,:] contains
 # select data -- MNN or difference
 X_diff = X[0] # word
 # as we are doing a behaviour covariate regression exclude data we have no covariate for
-facts = pd.read_csv('/imaging/ai05/phono_oddball/ref_data/components_MNE.csv')
-facts = facts.to_numpy()
+facts = pd.read_csv('/imaging/ai05/phono_oddball/ref_data/components_MNE.csv', header=0, index_col=0)
 
-behav = [f[7] for f in facts]
-behav_name = 'Maths'
-X_in = np.empty((len([f for f in behav if not np.isnan(f)]), X_diff.shape[1], X_diff.shape[2]))
+names_to_regress = ['FS_2T_scores', 'WJ_RdFl_std', 'WJ_MtFl_std']
+
+regmat = np.transpose(facts[names_to_regress].to_numpy())
+
+
+X_in = np.empty((len([f for f in regmat[0] if not np.isnan(f)]), X_diff.shape[1], X_diff.shape[2]))
 cnt = 0
-for i in range(len(behav)):
-    if not np.isnan(behav[i]):
+for i in range(len(regmat[0])):
+    if not np.isnan(regmat[0][i]):
         X_in[cnt, :, :] = X_diff[i, :,:]
         cnt += 1
 
-behav = [f for f in behav if not np.isnan(f)]
+regmat = regmat[:, ~np.isnan(regmat).any(axis=0)]# dropnans
 
+regmat = np.array([scipy.stats.zscore(i) for i in regmat])
 
 # load in data to GLM data struture
 dat = glmtools.data.TrialGLMData(data=X_in, dim_labels=['participants', 'time', 'channels'])
 
-# add regressors
+# add regressor for intercept
 regs = list()
 regs.append(glmtools.regressors.ConstantRegressor(num_observations=X_in.shape[0]))
-regs.append(glmtools.regressors.ParametricRegressor(values=behav,
-                                                    name=behav_name,
+# make contrasts and add intercept
+contrasts = [glmtools.design.Contrast(name='Intercept',values=[1] + [0]*regmat.shape[0])]
+#loop through continous regreessors and add (also to the info and contrasts)
+for i in range(regmat.shape[0]):
+    regs.append(glmtools.regressors.ParametricRegressor(values=regmat[i],
+                                                    name=names_to_regress[i],
                                                     preproc='z',
                                                     num_observations=X_in.shape[0]))
-# add covariate to info
-dat.info[behav_name] = behav
+    # add covariate to info
+    dat.info[names_to_regress[i]] = regmat[i]
+    values = [0] * (regmat.shape[0] +1)
+    values[i+1] = 1
+    contrasts.append(glmtools.design.Contrast(name=names_to_regress[i],values=values))
 
 # contrasts
 
-contrasts = [glmtools.design.Contrast(name='Intercept',values=[1,0])]
-contrasts.append(glmtools.design.Contrast(name=behav_name,values=[0,1]))
 
 des = glmtools.design.GLMDesign.initialise(regs,contrasts)
-for f in des.regressor_list:
-    f.rtype = 'Parametric'
+
 
 model = glmtools.fit.OLSModel( des, dat )
-
-#%%
-model_perm = glmtools.permutations.permute_glm(des, dat, nperms=20, nomax_axis=1)
-"""
-sort by permutation axis for each timepoint, 
-take 2.5 and 97.5 percentile (top and bottom of sorted list) (t-values/copes beyond which) 
-"""
 
 #%% put the copes / betas into an evoked object
 
 dum_ev_int = mne.EvokedArray(np.transpose(model.copes[0,:,:]), info=words_e[0].info, tmin=-0.3,
-                        nave=len(behav))
+                        nave=len(regmat[0]))
+dum_ev_int.plot_joint().savefig('/imaging/ai05/images/glm_intercept_cope.png')
+for i in range(regmat.shape[0]):
+    dum_ev_reg = mne.EvokedArray(np.transpose(model.copes[i+1,:,:]), info=words_e[0].info, tmin=-0.3,
+                        nave=len(regmat[0]))
 
-dum_ev_reg = mne.EvokedArray(np.transpose(model.copes[1,:,:]), info=words_e[0].info, tmin=-0.3,
-                        nave=len(behav))
+    dum_ev_reg.plot_joint().savefig(f'/imaging/ai05/images/glm_{names_to_regress[i]}_cope.png')
 
-dum_ev_int.plot_joint(picks=pickchans).savefig('/home/ai05/glm_intercept_cope.png')
-dum_ev_reg.plot_joint(picks=pickchans).savefig(f'/home/ai05/glm_{behav_name}_cope.png')
+
+#%% get null distributions
+# note that the first row will be the original model, unpermuted
+for f in des.regressor_list:
+    f.rtype = 'Parametric'
+permuted = red_perm.permute_glm(des, dat, nperms=100, stat='cope',nomax_axis=None)
+
+
+ #%%
+"""
+output from perm 
+"""
+
+thresh = .01
+# make empty matrix for holding permute percentiles
+# contrast x low/hi x timepoint
+
+# get mask of significant time points relative to model
+threshold_perms = np.quantile(permuted[:,1:-1,:,:], [.thresh], axis=1)
+
+# force any cope stat in the image with a False to be 0
+
+mask = model.copes[:,:,:] > threshold_perms[0,:,:,:] # mask for all
+
+masked_model = model.copes.copy()
+masked_model[~mask] = 0
+
+#%% plot the results of permutation test
+
+# Plot the outputs
+for i in range(model.copes.shape[0]):
+    name = model.contrast_names[i]
+    dum_ev = mne.EvokedArray(np.transpose(model.copes[i,:,:]), info=words_e[0].info, tmin=-0.3,
+                        nave=len(model.design_matrix))
+    dum_ev.plot_joint(title=name, ts_args=dict(time_unit='s'),
+                                 topomap_args=dict(time_unit='s')).savefig('/home/ai05/reg_' + name+ '.png')
+
+    reject_H0 = np.transpose(mask[i, :,:])
+    dum_ev.plot_image(mask=reject_H0, time_unit='s').savefig('/home/ai05/reg_p_vals' +  name+ '.png')
+
 
 #%%
+colors = {"Dev Word": "crimson", "Dev Non-Word": 'steelblue'}
+linestyles = {"L": '-', "R": '--'}
 
-dum_ev_int = mne.EvokedArray(np.transpose(model.betas[0,:,:]), info=words_e[0].info, tmin=-0.3,
-                        nave=len(behav))
+# get sensor positions via layout
+pos = mne.find_layout(words_e[0].info).pos
 
-dum_ev_reg = mne.EvokedArray(np.transpose(model.betas[1,:,:]), info=words_e[0].info, tmin=-0.3,
-                        nave=len(behav))
+# combine evokeds for group level
+word = mne.combine_evoked(words_e, weights=[1]*len(words_e))
+non_word = mne.combine_evoked(non_words_e, weights=[1]*len(non_words_e))
+evokeds = {'Dev Word': word, 'Dev Non-Word': non_word}
 
-dum_ev_int.plot_joint(picks=).savefig('/home/ai05/glm_intercept_betas.png')
-dum_ev_reg.plot_joint().savefig(f'/home/ai05/glm_{behav_name}_betas.png')
+# list to keep masks in for later analysis
+reg_masks = []
+
+# loop through each contrast
+for i in range(model.copes.shape[0]):
+
+    #get the mask for this loop
+    mask = model.copes[i, :, :] > threshold_perms[0, i, :, :]
+
+    ch_mask = mask[0,:]
+    sig_chs = np.array(words_e[0].info['ch_names'])[ch_mask]
+
+
+    time_inds = np.unique(time_inds)
+
+    # get topography for F stat
+    f_map = T_obs[time_inds, ...].mean(axis=0)
+
+    # get signals at the sensors contributing to the cluster
+    sig_times = words_e[0].times[time_inds]
+
+    # create spatial mask
+    mask = np.zeros((f_map.shape[0], 1), dtype=bool)
+    mask[ch_inds, :] = True
+    reg_masks.append(mask)
+    # initialize figure
+    fig, ax_topo = plt.subplots(1, 1, figsize=(10, 3))
+
+    # plot average test statistic and mark significant sensors
+    image, _ = mne.viz.plot_topomap(f_map, pos, mask=mask, axes=ax_topo, cmap='Reds',
+                            vmin=np.min, vmax=np.max, show=False)
+
+    # create additional axes (for ERF and colorbar)
+    divider = make_axes_locatable(ax_topo)
+
+    # add axes for colorbar
+    ax_colorbar = divider.append_axes('right', size='5%', pad=0.05)
+    plt.colorbar(image, cax=ax_colorbar)
+    ax_topo.set_xlabel(
+        'Averaged F-map ({:0.3f} - {:0.3f} s)'.format(*sig_times[[0, -1]]))
+
+    # add new axis for time courses and plot time courses
+    ax_signals = divider.append_axes('right', size='300%', pad=1.2)
+    title = 'Cluster #{0}, {1} sensor'.format(i_clu + 1, len(ch_inds))
+    if len(ch_inds) > 1:
+        title += "s (mean)"
+    mne.viz.plot_compare_evokeds(evokeds, title=title, picks=ch_inds, axes=ax_signals,
+                         colors=colors, show=False,
+                         split_legend=True, truncate_yaxis='auto', combine='mean')
+
+    # plot temporal cluster extent
+    ymin, ymax = ax_signals.get_ylim()
+    ax_signals.fill_betweenx((ymin, ymax), sig_times[0], sig_times[-1],
+                             color='orange', alpha=0.3)
+
+    # clean up viz
+    mne.viz.tight_layout(fig=fig)
+    fig.subplots_adjust(bottom=.05)
+
+    fig.savefig(f'/home/ai05/cluster_{str(i_clu)}.png')
+
+
+
+#%% find clusters
+
+# get tstats & hack fstats
+tstats = model.get_tstats()
+fstats = tstats ** 2 # hacky but should be fine f = 2T in linear models (maybe)
+
+nchannels = fstats.shape[2]
+ntimes = fstats.shape[1]
+
+
+# connectivity
+from mne.stats.cluster_level import _find_clusters,_setup_connectivity
+#%%
+connectivity, chan_names  = mne.channels.find_ch_connectivity(words_e[0].info, ch_type='mag')
+connectivity = _setup_connectivity(connectivity, n_tests=nchannels, n_times=ntimes)
+
+#%find clusters
+threshold = dict(start=.1, step=.1)
+# try just with intercept first
+#in_f = fstats[0,:,:]
+in_f = model.get_tstats()[0,:,:]
+
+
+in_f = in_f.reshape((ntimes * nchannels))
+
+# find clusters
+clusters, cluster_stats = _find_clusters(in_f,
+                                         threshold=5,
+                                         #connectivity=connectivity,
+                                         tail=1)
+
+#%% back prokect
+sig_mask = cluster_stats > 20
+in_f = np.transpose(in_f.reshape((ntimes, nchannels)), (1, 0))
+sig_mask = np.transpose(sig_mask.reshape((ntimes, nchannels)), (1, 0))
+#%%
+for f in des.regressor_list:
+    f.rtype = 'Parametric'
+model_perm = glmtools.permutations.permute_glm(des, dat, nperms=5, nomax_axis=1)
