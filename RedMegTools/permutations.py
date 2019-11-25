@@ -141,16 +141,15 @@ def permute_glm_cluster( glmdes, data, scriptdir, pythondir, filesdir, nperms=50
         if mode is None:
             raise ValueError('unable to determine mode')
         # we now need to save g, x, glemdes, cinds and data
-
+        saveobject = (g, x, cinds, glmdes, data)
+        os.makedirs(os.path.dirname(filesdir), exist_ok=True)
+        with open(f'{filesdir}/temp_info.pkl', "wb") as f:
+            pickle.dump(saveobject, f)
 
         print('Permuting {0} by {1}'.format(glmdes.contrast_list[jj],mode))
         for ii in range(1,nperms):
-
-            saveobject = (g, x, cinds, glmdes, data)
-            os.makedirs(os.path.dirname(filesdir), exist_ok=True)
-            with open(f'{filesdir}/temp_info{jj}_{ii}.pkl', "wb") as f:
-                pickle.dump(saveobject, f)
-
+            # copy and rename resources
+            os.system(f'cp {filesdir}/temp_info.pkl {filesdir}/temp_info_{jj}{ii}.pkl')
             # template script for looping over
             pycom = f"""
 import sys
@@ -159,7 +158,7 @@ import numpy as np
 from glmtools import fit,regressors
 import pickle
 
-with open(f'{filesdir}/temp_info{jj}_{ii}.pkl, "rb") as f:
+with open('{filesdir}/temp_info_{jj}{ii}.pkl', "rb") as f:
     saveobject = pickle.load(f)
 
 g, x, cinds, glmdes, data = saveobject
@@ -210,7 +209,7 @@ print('file save complete')
             print(tcshf, file=open(f'{scriptdir}/batch_perm_{jj}_{ii}.csh', 'w'))
 
             # execute this on the cluster
-            os.system(f'sbatch --job-name=alex_perm_465 --mincpus=1 -t 0-8:00 --out={jj}_{ii}_%j.out {scriptdir}/batch_perm_{jj}_{ii}.csh')
+            os.system(f'sbatch --job-name=alex_perm_465 --mincpus=1 -t 0-1:00 --out={jj}_{ii}_%j.out {scriptdir}/batch_perm_{jj}_{ii}.csh')
 
 
     # wait until all permutations are done
