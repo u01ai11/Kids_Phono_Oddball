@@ -248,7 +248,6 @@ print('file save complete')
             try:
                 infile = np.load(f'{filesdir}/{jj}_{ii}.npy')
                 nulls[jj, ii] = infile
-                os.system(f'rm {filesdir}/{jj}_{ii}.npy') # delete
             except FileNotFoundError:
                 print(f'missing {filesdir}/{jj}_{ii}.npy')
 
