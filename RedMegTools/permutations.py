@@ -141,13 +141,15 @@ def permute_glm_cluster( glmdes, data, scriptdir, pythondir, filesdir, nperms=50
         if mode is None:
             raise ValueError('unable to determine mode')
         # we now need to save g, x, glemdes, cinds and data
-        saveobject = (g, x, cinds, glmdes, data)
-        os.makedirs(os.path.dirname(filesdir), exist_ok=True)
-        with open(f'{filesdir}/temp_info.pkl', "wb") as f:
-            pickle.dump(saveobject, f)
+
 
         print('Permuting {0} by {1}'.format(glmdes.contrast_list[jj],mode))
         for ii in range(1,nperms):
+
+            saveobject = (g, x, cinds, glmdes, data)
+            os.makedirs(os.path.dirname(filesdir), exist_ok=True)
+            with open(f'{filesdir}/temp_info{jj}_{ii}.pkl', "wb") as f:
+                pickle.dump(saveobject, f)
 
             # template script for looping over
             pycom = f"""
@@ -157,7 +159,7 @@ import numpy as np
 from glmtools import fit,regressors
 import pickle
 
-with open(f'{filesdir}/temp_info.pkl', "rb") as f:
+with open(f'{filesdir}/temp_info{jj}_{ii}.pkl, "rb") as f:
     saveobject = pickle.load(f)
 
 g, x, cinds, glmdes, data = saveobject
