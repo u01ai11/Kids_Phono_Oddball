@@ -232,9 +232,9 @@ print('file save complete')
     completed = False
     while completed == False:
         queued = len(os.popen('squeue -n alex_perm_465').read().split('\n'))-2
-        perc_done = 1-(queued/glmdes.num_contrasts)
+        perc_done = 1-(queued/((nperms-1)*glmdes.num_contrasts))
 
-        sys.stdout.write("\rClustering %i percent" % float(perc_done*100))
+        sys.stdout.write("\rClustering %i percent" % round(perc_done*100,2))
         sys.stdout.flush()
         if perc_done == 1.0:
             completed = True
