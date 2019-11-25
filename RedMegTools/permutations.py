@@ -208,7 +208,7 @@ print('file save complete')
             print(tcshf, file=open(f'{scriptdir}/batch_perm_{jj}_{ii}.csh', 'w'))
 
             # execute this on the cluster
-            os.system(f'sbatch --job-name=alex_perm_465 --mincpus=1 -t 0-8:00 --out=%j_%x.out {scriptdir}/batch_perm_{jj}_{ii}.csh')
+            os.system(f'sbatch --job-name=alex_perm_465 --mincpus=1 -t 0-8:00 --out={jj}_{ii}_%j.out {scriptdir}/batch_perm_{jj}_{ii}.csh')
 
 
     # wait until all permutations are done
