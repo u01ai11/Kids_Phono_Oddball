@@ -215,6 +215,7 @@ print('file save complete')
 #SBATCH --job-name=alex_perm_465
 #SBATCH --mincpus=1
 #SBATCH --out={jj}_%j.out
+#SBATCH --requeue 
 #SBATCH -a 1-{nperms}
 {pythondir} {scriptdir}/batch_perm_{jj}.py $SLURM_ARRAY_TASK_ID
               """

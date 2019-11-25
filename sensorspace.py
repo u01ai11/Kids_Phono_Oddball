@@ -382,6 +382,7 @@ permuted = red_perm.permute_glm_cluster(des, dat, nperms=1000, stat='cope',nomax
                                         scriptdir='/imaging/ai05/phono_oddball/cluster_scripts',
                                         pythondir='/home/ai05/.conda/envs/mne_2/bin/python',
                                         filesdir='/imaging/ai05/phono_oddball/cluster_files')
+np.save('/imaging/ai05/phono_oddball/permuted.py', permuted)
  #%%
 """
 output from perm 
