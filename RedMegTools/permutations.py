@@ -245,9 +245,13 @@ print('file save complete')
     for jj in range(glmdes.num_contrasts):
         for ii in range(1,nperms):
             #load
-            infile = np.load(f'{filesdir}/{jj}_{ii}.npy')
-            nulls[jj, ii] = infile
-            os.system(f'rm {filesdir}/{jj}_{ii}.npy') # delete
+            try:
+                infile = np.load(f'{filesdir}/{jj}_{ii}.npy')
+                nulls[jj, ii] = infile
+                os.system(f'rm {filesdir}/{jj}_{ii}.npy') # delete
+            except FileNotFoundError:
+                print(f'missing {filesdir}/{jj}_{ii}.npy')
+
 
     #return this
     return nulls
