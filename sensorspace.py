@@ -21,6 +21,8 @@ import pandas as pd
 import scipy
 from collections import namedtuple
 import copy
+
+os.chdir('/imaging/ai05/phono_oddball/cluster_logs')
 # pointers to our directories
 rawdir = '/imaging/ai05/phono_oddball/aligned_raws'  # raw fifs to input
 mne_save_dir = '/imaging/ai05/phono_oddball/mne_files'  # where to save MNE MEG files
@@ -316,7 +318,7 @@ X_diff = X[0] # word
 # as we are doing a behaviour covariate regression exclude data we have no covariate for
 facts = pd.read_csv('/imaging/ai05/phono_oddball/ref_data/components_MNE.csv', header=0, index_col=0)
 
-names_to_regress = ['FS_2T_scores', 'WJ_RdFl_std', 'WJ_MtFl_std']
+names_to_regress = ['WM_exec', 'Classic_IQ', 'verbalstm_wm', 'education']
 
 regmat = np.transpose(facts[names_to_regress].to_numpy())
 
@@ -360,6 +362,50 @@ des = glmtools.design.GLMDesign.initialise(regs,contrasts)
 
 model = glmtools.fit.OLSModel( des, dat )
 
+#%% try and get a cluster thing getting sensible clusters
+from mne.stats.cluster_level import _find_clusters, _reshape_clusters
+
+tstats = model.get_tstats()
+flatt = tstats[1].flatten()
+connectivity, ch_names = mne.channels.find_ch_connectivity(words_e[0].info, ch_type='mag')
+connectivity = mne.stats.cluster_level._setup_connectivity(connectivity, len(flatt), tstats.shape[1])
+
+
+# clus is a 1d mask and stat is the associated tstat
+clus, cstat = _find_clusters(tstats[1].flatten(), threshold=3, tail=1, connectivity=connectivity)
+clusters = _reshape_clusters(clus, (tstats[0].shape[0], tstats[0].shape[1]))
+
+#%% permute for cluster distribution
+for f in des.regressor_list:
+    f.rtype = 'Parametric'
+#clus_null = red_perm.c_corrected_permute_glm(des, dat, nperms=100, threshold=3)
+clus_null = cluster_c_corrected_permute_glm(des, dat, nperms=1000, threshold=2.5,
+                                                    connectivity=connectivity,
+                                                     scriptdir='/imaging/ai05/phono_oddball/cluster_scripts',
+                                                     pythondir='/home/ai05/.conda/envs/mne_2/bin/python',
+                                                     filesdir='/imaging/ai05/phono_oddball/cluster_files')
+
+np.save('/imaging/ai05/phono_oddball/permuted_clusters_1000.npy', clus_null)
+#%%
+clus_null = np.load('/imaging/ai05/phono_oddball/permuted_clusters_1000.npy')
+#%% calculate pluster p values based on null values
+import scipy.stats as ss
+all_clus = []
+p_vals = []
+for i in range(tstats.shape[0]):
+    all_clus.append(_find_clusters(tstats[i].flatten(), threshold=3, tail=1, connectivity=connectivity))
+    this_c, this_s = all_clus[i]
+    tmp_score = [ss.percentileofscore(clus_null[i], f)/100 for f in this_s]
+    p_vals.append(tmp_score)
+
+#%%
+dum_ev_reg = mne.EvokedArray(np.transpose(tstats[0]), info=words_e[0].info, tmin=-0.3,
+                             nave=len(regmat[0]))
+
+plt.close('all')
+plt.imshow(clusters[0])
+plt.show()
+
 #%% put the copes / betas into an evoked object
 
 dum_ev_int = mne.EvokedArray(np.transpose(model.copes[0,:,:]), info=words_e[0].info, tmin=-0.3,
@@ -376,38 +422,56 @@ for i in range(regmat.shape[0]):
 # note that the first row will be the original model, unpermuted
 for f in des.regressor_list:
     f.rtype = 'Parametric'
+    #%%
 permuted = red_perm.permute_glm(des, dat, nperms=100, stat='cope',nomax_axis=None)
 # %% Try the cluster one
 permuted = red_perm.permute_glm_cluster(des, dat, nperms=1000, stat='cope',nomax_axis=None,
                                         scriptdir='/imaging/ai05/phono_oddball/cluster_scripts',
                                         pythondir='/home/ai05/.conda/envs/mne_2/bin/python',
                                         filesdir='/imaging/ai05/phono_oddball/cluster_files')
-np.save('/imaging/ai05/phono_oddball/permuted.py', permuted)
+np.save('/imaging/ai05/phono_oddball/permuted_factors_copes.npy', permuted)
+#%%
+permuted = np.load('/imaging/ai05/phono_oddball/permuted.npy')
  #%%
 """
 output from perm 
 """
 
-thresh = .01
+thresh = 0.1
 # make empty matrix for holding permute percentiles
 # contrast x low/hi x timepoint
 
-# get mask of significant time points relative to model
-threshold_perms = np.quantile(permuted[:,1:-1,:,:], [.thresh], axis=1)
+# extract actual model from first perm
+stats = permuted[:,0,:,:]
 
+permutations = permuted[:,1:-1,:,:]
+
+#%% signed
+# get mask of significant time points relative to model
+threshold_perms_upper = np.percentile(permutations[:,:,:,:], [100-thresh], axis=1)
+threshold_perms_lower = np.percentile(permutations[:,:,:,:], [thresh], axis=1)
 # force any cope stat in the image with a False to be 0
 
-mask = model.copes[:,:,:] > threshold_perms[0,:,:,:] # mask for all
+mask = np.where((stats < threshold_perms_upper[0,:,:,:]) & (stats > threshold_perms_lower[0,:,:,:]), False, True)# mask for all
 
-masked_model = model.copes.copy()
+masked_model = stats.copy()
 masked_model[~mask] = 0
 
+#%% abs
+# or absolute sign
+permutations = np.abs(permutations)
+stats = np.abs(stats)
+threshold_abs = np.percentile(permutations[:,:,:,:], [100-thresh], axis=1)
+mask = (stats > threshold_abs[0,:,:,:])
+
+masked_model = stats.copy()
+masked_model[~mask] = 0
 #%% plot the results of permutation test
 
 # Plot the outputs
-for i in range(model.copes.shape[0]):
+for i in range(stats.shape[0]):
     name = model.contrast_names[i]
-    dum_ev = mne.EvokedArray(np.transpose(model.copes[i,:,:]), info=words_e[0].info, tmin=-0.3,
+    dum_ev = mne.EvokedArray(np.transpose(stats[i,:,:]), info=words_e[0].info, tmin=-0.3,
                         nave=len(model.design_matrix))
     dum_ev.plot_joint(title=name, ts_args=dict(time_unit='s'),
                                  topomap_args=dict(time_unit='s')).savefig('/home/ai05/reg_' + name+ '.png')
