@@ -225,9 +225,10 @@ def __inv_op_individual(infof, fwdf, covf, loose, depth, outdir):
         info = mne.io.read_raw_fif(infof, preload=True)
         # pick magnetometers
         fwd = mne.read_forward_solution(fwdf)
+        fwd = mne.convert_forward_solution(fwd, surf_ori=False, force_fixed=False)
         cov = mne.read_cov(covf)
 
-        inv = mne.minimum_norm.make_inverse_operator(info.info, fwd, cov, loose=loose, depth=depth)
+        inv = mne.minimum_norm.make_inverse_operator(info.info, fwd, cov, loose=loose, depth=depth, fixed=False)
         mne.minimum_norm.write_inverse_operator(fname, inv)
     except Exception as e:
         print(fname + ' not made for some reason')
@@ -278,8 +279,8 @@ def __invert_individual(evoked, inv, lambda2, method, morph, fsdir, fssub, outdi
 
     parts = os.path.basename(evoked).split('_')
     num = parts[0]
-
-    fname = f'{outdir}/{parts[0]}_{parts[2].split(".")[0]}'
+    run = parts[1]
+    fname = f'{outdir}/{num}_{run}_{parts[2].split(".")[0]}'
 
     if os.path.isfile(fname):
         print(f'{fname} ALREADY EXISTS -SKIPPING')

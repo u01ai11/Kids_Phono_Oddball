@@ -22,11 +22,12 @@ struct_dir = '/imaging/ai05/phono_oddball/structurals_renamed'  # where our stru
 fs_sub_dir = '/imaging/ai05/phono_oddball/fs_subdir'  # fresurfer subject dir
 mne_src_dir = '/imaging/ai05/phono_oddball/mne_source_models'
 mne_epo_out = '/imaging/ai05/phono_oddball/mne_epoch'
-mne_evo_out = '/imaging/ai05/phono_oddball/mne_evoked'
+mne_evo_out = '/imaging/ai05/phono_oddball/mne_evoked_sess'
 src_ev_dir = '/imaging/ai05/phono_oddball/mne_ev_src'
+inv_dir = '/imaging/ai05/phono_oddball/mne_inv_parts'
 flist = [f for f in os.listdir(rawdir) if os.path.isfile(os.path.join(rawdir, f))]
 subnames_only = list(set([x.split('_')[0] for x in flist])) # get a unique list of IDs
-
+os.chdir('/imaging/ai05/phono_oddball/cluster_logs')
 #%% PREPROCESSING
 
 # set to use only a few processers on this node
@@ -138,7 +139,7 @@ contlist2 = collections.OrderedDict({
 })
 
 # get an input file name list
-flist = [f for f in os.listdir(mne_epo_out) if '_concat_' in f]
+flist = [f for f in os.listdir(mne_epo_out) if '_concat_' not in f]
 
 # run the process for getting evoked
 saved_evoked_list = red_epoch.evoked_multiple(flist=flist,
@@ -240,22 +241,22 @@ mne_fwd_files = red_inv.fwd_solution_multiple(megfs,
 
 #%% combine runs for each participant
 #get epoched files for this
-allepo = [f for f in os.listdir(mne_epo_out) if 'concat_epo.fif' in f]
+allepo = [f for f in os.listdir(mne_epo_out) if '_epo.fif' in f]
 eponum = set([f.split('_')[0] for f in allepo]) # parts
 
 
 # add file list
 allepo = [f'{mne_epo_out}/{f}' for f in allepo]
-#%% compute covariance matrix
-
+#%% compute covariance matrix but just for the half files
+allepo = [f for f in allepo if 'concat' not in f]
 
 #%%
 cov_files = red_inv.cov_matrix_multiple_cluster(epochlist=allepo,
                                                 method='empirical',
                                                 rank=None,
                                                 tmax=0,
-                                                outdir='/imaging/ai05/phono_oddball/mne_cov_run',
-                                                pythonpath='/home/ai05/anaconda3/envs/mne_2/bin/python',
+                                                outdir='/imaging/ai05/phono_oddball/mne_cov_parts',
+                                                pythonpath='/home/ai05/.conda/envs/mne_2/bin/python',
                                                 scriptpath='/home/ai05/clusterscripts'
                                                 )
 #%%
@@ -266,22 +267,44 @@ cov_files = red_inv.cov_matrix_multiple(epochlist=allepo,
                                         outdir='/imaging/ai05/phono_oddball/mne_cov_run',
                                         njobs=15
                                         )
-#%% compute an inverse solution
+#%% compute an inverse solution - we'll have one for each run
 # need 3 lists of files
+
+# get ids for those who we have a BEM model for
 ids = [f.split('_')[0] for f in bem_nos]
 
 inraw, infwd, incov = [],  [], []
+
+# all raw files
 allrs = [f for f in os.listdir(rawdir) if os.path.isfile(rawdir+'/'+f)]
-allrs = [f for f in allrs if '_1_' in f]
+allrs = [f for f in allrs if 'clean' in f]
+
+# all sourcespace files
 allss = [f for f in os.listdir(mne_src_dir) if os.path.isfile(mne_src_dir+'/'+f)]
 allss = [f for f in allss if 'volume' not in f]
-allcov = [f for f in os.listdir('/imaging/ai05/phono_oddball/mne_cov_run')]
+
+# all covariance files
+allcov = [f for f in os.listdir('/imaging/ai05/phono_oddball/mne_cov_parts')]
 # get list of raws
-for id in ids:
-    raws = [f for f in allrs if id in f]
-    alls = [f for f in allss if id in f]
-    allcs = [f for f in allcov if id in f]
-    allcs = [f for f in allcs if 'concat' in f]
+for cov in allcov:
+    # get run id
+    runid = cov.split('_')[1].split('-')[0]
+    # get part id
+    partid = cov.split('_')[0]
+    # skip if not in bemnos
+    if partid not in ids:
+        continue
+
+    #get matching raw file
+    raws = [f for f in allrs if partid in f]
+    raws = [f for f in raws if '_'+runid+'_' in f]
+
+    # get matching sourcespace
+    alls = [f for f in allss if partid in f]
+
+    #get matching covariants
+    allcs = [f for f in allcov if partid in f]
+    allcs = [f for f in allcs if '_' + runid + '-' in f]
     if len(raws) > 0:
         inraw.append(rawdir + '/' + raws[0])
     else:
@@ -295,7 +318,7 @@ for id in ids:
 
     covs = [f for f in allcs if '-cov.fif' in f]
     if len(covs) > 0:
-        incov.append('/imaging/ai05/phono_oddball/mne_cov_run' + '/' + covs[0])
+        incov.append('/imaging/ai05/phono_oddball/mne_cov_parts' + '/' + covs[0])
     else:
         incov.append('')
 
@@ -329,19 +352,20 @@ for i in range(len(incov)):
 
 
 #%% compute an inverse solution
+
 fname_inv = red_inv.inv_op_multiple(infofs=inraw,
                                     fwdfs=infwd,
                                     covfs=incov,
                                     loose=0.2,
-                                    depth=0.8,
-                                    outdir=mne_src_dir,
-                                    njobs=15)
+                                    depth=0.2,
+                                    outdir=inv_dir,
+                                    njobs=25)
 
 #%% check the files
-evoked =[mne_evo_out+'/'+f for f in os.listdir(mne_evo_out) if 'MNN_ave' in f]
-ev_nums = [os.path.basename(f).split('_')[0] for f in evoked]
-fname_inv = [f for f in os.listdir(mne_src_dir) if 'concat-inv' in f]
-fname_inv = [f'{mne_src_dir}/{f}' for f in fname_inv]
+evoked =[mne_evo_out+'/'+f for f in os.listdir(mne_evo_out) if 'MNN-Word' in f]
+ev_nums = [os.path.basename(f).split('_')[0]+'_'+os.path.basename(f).split('_')[1] for f in evoked]
+fname_inv = [f for f in os.listdir(inv_dir) if '-inv' in f]
+fname_inv = [f'{inv_dir}/{f}' for f in fname_inv]
 invs = [[i for i in fname_inv if n in i] for n in ev_nums] #list
 invs = [f[0] if len(f) > 0 else '' for f in invs] # first or empty
 
@@ -349,7 +373,7 @@ for ind, i_d in enumerate(invs):
     if '' in [invs[ind]]:
         del evoked[ind]; del invs[ind];
 #%%
-plot_sources(evoked, invs,'/home/ai05/',fs_sub_dir );
+plot_sources(evoked, invs,'/imaging/ai05/phono_oddball/mne_source_plots',fs_sub_dir );
 
 #%% source estimates for all evoked responses -- setup files
 
@@ -405,7 +429,7 @@ non_words = [f'{mne_evo_out}/{f}' for f in non_words]
 #%%
 word_src = red_inv.invert_multiple(evokedfs=words,
                                        invfs=word_invs,
-                                       lambda2 = 3,
+                                       lambda2 = 2,
                                        method='dSPM',
                                        morph=True,
                                        fsdir=fs_sub_dir,
@@ -415,7 +439,7 @@ word_src = red_inv.invert_multiple(evokedfs=words,
 #%% Now the second one
 non_word_src = red_inv.invert_multiple(evokedfs=non_words,
                                        invfs=non_word_invs,
-                                       lambda2 = 3,
+                                       lambda2 = 2,
                                        method='dSPM',
                                        morph=True,
                                        fsdir=fs_sub_dir,
@@ -426,12 +450,16 @@ non_word_src = red_inv.invert_multiple(evokedfs=non_words,
 
 #%% get average of each for just looking at
 src_ev_dir = '/imaging/ai05/phono_oddball/mne_ev_src'
-
+w_lh = [f for f in os.listdir(src_ev_dir) if 'MNN-Word-lh' in f]
+w_rh = [f for f in os.listdir(src_ev_dir) if 'MNN-Word-rh' in f]
+n_lh = [f for f in os.listdir(src_ev_dir) if 'Non-Word-lh' in f]
+n_rh = [f for f in os.listdir(src_ev_dir) if 'Non-Word-rh' in f]
+#%%
 src_evs = [f for f in os.listdir(src_ev_dir) if os.path.isfile(f'{src_ev_dir}/{f}')]
 wrd_ids = list(set([f.split('_')[0] for f in src_evs]))
 inWord = []
 inNword = []
-for ID in wrd_ids:
+for i in range(len(non_word_src)):
     thisids = [f for f in src_evs if ID in f]
     thisword = [f'{src_ev_dir}/{f}' for f in thisids if 'MNN-Word' in f]
     thisword = [[f for f in thisword if 'rh' in f][0], [f for f in thisword if 'lh' in f][0]]
@@ -448,24 +476,67 @@ est.plot(backend='matplotlib', initial_time=time_max,
          smoothing_steps=5).savefig('/home/ai05/test.png')
 
 #%% read and create big matrix
-inw = [f[0] for f in inWord]
-innw = [f[0] for f in inNword]
-X = red_group.src_concat_mat([inw, innw], 'fsaverage')
+# inw = [f[0] for f in inWord]
+# innw = [f[0] for f in inNword]
+ws = [f.split('-lh')[0] for f in w_lh]
+ws = [f'{src_ev_dir}/{f}' for f in ws]
+ns = [f.split('-lh')[0] for f in n_lh]
+ns = [f'{src_ev_dir}/{f}' for f in ns]
 
+# match these lists
+wbase= [os.path.basename(f).split('MNN')[0] for f in ws]
+nbase = [os.path.basename(f).split('MNN')[0] for f in ws]
+
+#loop through word_base
+fws = []
+fns = []
+for i in range(len(wbase)):
+    match_n = [f for f in nbase if wbase[i] in f]
+    if len(match_n) > 0:
+        fws.append(src_ev_dir+'/'+match_n[0]+'MNN-Word')
+        fns.append(src_ev_dir + '/' + match_n[0] + 'MNN-Non-Word')
+    else:
+        print('not matched for '+ match_n[0])
+
+X = red_group.src_concat_mat([fws,fns], 'fsaverage')
+
+#%% take difference
+og_X = copy.deepcopy(X)
+
+X = X[:,:,:,0] - X[:,:,:,1]
+#%% filter out participants with non-spatial specific responses
+# take SD along the time axis
+import numpy as np
+
+stds = []
+for i in range(X.shape[2]):
+    meanmap = np.mean(X[:, :, i], axis = 1)
+    stds.append(meanmap.std())
+    perc_done = i / X.shape[2]
+    sys.stdout.write("\rReading %i percent" % round(perc_done * 100, 2))
+    sys.stdout.flush()
+
+#%% get the silly indices as a mask
+silly_mask = np.array(stds) < 10000
+X_filt = X[:,:,silly_mask]
 #%% plot an average
 import numpy as np
 import matplotlib.pyplot as plt
 
 # read in dummy stc
-stc = mne.read_source_estimate(inw[0][0:-7], 'fsaverage')
+#stc = mne.read_source_estimate(ws[0][0:-7], 'fsaverage')
+stc = mne.read_source_estimate(ws[0], 'fsaverage')
 # replace it's data with an average
-stc.data = np.average(np.abs(X[:,:,:,0]) - np.abs(X[:,:,:,1]), axis=2)
-#stc.data = np.average(X[:,:,:,0], axis=2)
-#stc.data = (X[:,:,1,0] - X[:,:,1,1])
+#stc.data = np.average(np.abs(X[:,:,:,0]), axis=2)
+xav = np.average(X_filt[:,:,:], axis=2)
+#%%
+xpart = X[:,:,11]
 
+stc.data = xav
 #%%plot
-stc.plot(backend='matplotlib', initial_time=0.4,
-         smoothing_steps=5).savefig('/home/ai05/test_SPM.png')
+for i in range(0,1050, 50):
+    stc.plot(backend='matplotlib', initial_time=i/1000,
+             hemi='rh').savefig('/home/ai05/test_SPM.png')
 #%% generate label then plot activity
 for i in range(X.shape[2]):
     print(i)

@@ -327,7 +327,7 @@ print('file save complete')
     return nulls
 
 
-def cluster_c_corrected_permute_glm(glmdes, data, connectivity, scriptdir, filesdir, pythondir, nperms=5000,nomax_axis=None,
+def cluster_c_corrected_permute_glm(glmdes, data, connectivity, scriptdir, filesdir, pythondir,stat='cope', nperms=5000,nomax_axis=None,
         temporal_varcope_smoothing=None, threshold=3):
     """
     :param glmdes: Design matrix
@@ -421,9 +421,15 @@ g, x, cinds, glmdes, data, connectivity = saveobject
 
 g.design_matrix = apply_permutation( x.copy(), cinds[jj], mode )
 f = fit.OLSModel( g, data )
-
-tstats = f.get_tstats(temporal_varcope_smoothing={temporal_varcope_smoothing})
+if '{stat}' == 'cope':
+    tstats = f.copes
+    
+elif '{stat}' == 'tstat':
+    tstats = f.get_tstats(temporal_varcope_smoothing={temporal_varcope_smoothing})
+else:
+    print('{stat} is not a tstat or cope, please change this to run')
 # get clusters
+tstats=np.abs(tstats)
 clus, cstat = _find_clusters(tstats[jj].flatten(), threshold={threshold}, connectivity=connectivity, tail=1)
 
 out = cstat.max()
@@ -483,7 +489,7 @@ print('file save complete')
 
     # Now we have to load all the files
     for jj in range(glmdes.num_contrasts):
-        for ii in range(1, nperms):
+        for ii in range(0, nperms):
             # load
             try:
                 infile = np.load(f'{filesdir}/{jj}_{ii}.npy')

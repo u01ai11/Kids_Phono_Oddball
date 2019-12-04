@@ -4,7 +4,7 @@ from os.path import dirname
 import numpy as np
 import joblib
 import inspect
-
+import sys
 def src_concat_mat(stc_lists, morph2):
     """
     :param stc_lists:
@@ -21,11 +21,15 @@ def src_concat_mat(stc_lists, morph2):
     for i in range(len(stc_lists)):
         est_list.append([]) # empty storage
         # loop through files
-        for pair in stc_lists[i]:
+        for ii in range(len(stc_lists[i])):
+            pair = stc_lists[i][ii]
             #read and morph
-            est = mne.read_source_estimate(pair[0:-7], morph2)
+            est = mne.read_source_estimate(pair, morph2)
             # append
             est_list[i].append(est)
+            perc_done = ii / len(stc_lists[i])
+            sys.stdout.write("\rReading %i percent" % round(perc_done * 100, 2))
+            sys.stdout.flush()
 
     # make empty matrix to store
     # space x time x subjects x condition
@@ -37,6 +41,9 @@ def src_concat_mat(stc_lists, morph2):
             this_est = est_list[con][part]
             X[:, :, part, con] = this_est.data
 
+            perc_done = part / len(stc_lists[con])
+            sys.stdout.write(f"\r{con} data adding %i percent" % round(perc_done * 100, 2))
+            sys.stdout.flush()
     return X
 
 def submit_cluster_perm(Xf, srcf, jobs, buffer, t_thresh, scriptpath, pythonpath, outpath):

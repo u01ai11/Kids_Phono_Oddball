@@ -239,12 +239,11 @@ def plot_sources(evokeds, invs, outdir, fs_sub_dir):
     for i, evoke in enumerate(evokeds):
         this_ev = mne.read_evokeds(evoke)
         this_inv = mne.minimum_norm.read_inverse_operator(invs[i])
-        stc_mne = mne.minimum_norm.apply_inverse(this_ev[0], this_inv, lambda2=3, method='dSPM')
-        vertno_max, time_max = stc_mne.get_peak(hemi='lh')
+        stc_mne = mne.minimum_norm.apply_inverse(this_ev[0], this_inv, lambda2=2, method='dSPM', pick_ori=None)
+        vertno_max, time_max = stc_mne.get_peak(hemi='rh')
         surfer_kwargs = dict(
-            hemi='lh', subjects_dir=fs_sub_dir, views='lat',
-            initial_time=time_max, time_unit='s', size=(800, 800),
-            smoothing_steps=5, backend='matplotlib')
+            hemi='rh', subjects_dir=fs_sub_dir, views='lat',
+            initial_time=time_max, time_unit='s', size=(800, 800), backend='matplotlib')
         brain = stc_mne.plot(**surfer_kwargs)
-        brain.savefig(f'{outdir}/{os.path.basename(evoke).split(".")[0]}.png')
-
+        brain.savefig(f'{outdir}/src_{os.path.basename(evoke).split(".")[0]}.png')
+        #this_ev[0].plot_joint()[1].savefig(f'{outdir}/evo_{os.path.basename(evoke).split(".")[0]}.png')
