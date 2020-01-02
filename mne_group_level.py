@@ -93,7 +93,8 @@ saved_epoch_list = red_epoch.epoch_multiple(flist=filtered_in,
                                             backup_trigchan=backup_trigchan,
                                             times=[-0.3, 1.0],
                                             overwrite=True,
-                                            njobs=17)
+                                            njobs=17,
+                                            offset=0)
 
 #%% merge those epochs
 epo_base = [os.path.basename(f) for f in saved_epoch_list]
@@ -102,10 +103,10 @@ epo_nums = set([f.split('_')[0] for f in epo_base])
 
 def merge_epo(num, mne_epo_out, saved_epoch_list):
 
-    if os.path.isfile(f'{mne_epo_out}/{num}_concat_epo.fif'):
-        print(f'{mne_epo_out}/{num}_concat_epo.fif')
-        print('exists, skipping')
-        return
+    # if os.path.isfile(f'{mne_epo_out}/{num}_concat_epo.fif'):
+    #     print(f'{mne_epo_out}/{num}_concat_epo.fif')
+    #     print('exists, skipping')
+    #     return
 
     nums_fs = [f for f in saved_epoch_list if '/'+num+'_' in f]
     merge_l = []
@@ -118,8 +119,8 @@ def merge_epo(num, mne_epo_out, saved_epoch_list):
 joblib.Parallel(n_jobs=30)(
     joblib.delayed(merge_epo)(num, mne_epo_out, saved_epoch_list) for num in epo_nums)
 
-for num in epo_nums:
-    merge_epo(num, mne_epo_out, saved_epoch_list)
+# for num in epo_nums:
+#     merge_epo(num, mne_epo_out, saved_epoch_list)
 
 #%% EVOKED
 # compute evoked files from epoch list
@@ -139,7 +140,7 @@ contlist2 = collections.OrderedDict({
 })
 
 # get an input file name list
-flist = [f for f in os.listdir(mne_epo_out) if '_concat_' not in f]
+flist = [f for f in os.listdir(mne_epo_out) if '_concat_' in f]
 
 # run the process for getting evoked
 saved_evoked_list = red_epoch.evoked_multiple(flist=flist,

@@ -3,7 +3,7 @@ import os
 import numpy as np
 import joblib
 
-def epoch_multiple(flist, indir, outdir, keys, trigchan, backup_trigchan,times, overwrite, njobs):
+def epoch_multiple(flist, indir, outdir, keys, trigchan, backup_trigchan,times, overwrite, njobs, offset):
     """ Epochs a list of files using the passed in arguments.
     Parameters
     ----------
@@ -25,6 +25,8 @@ def epoch_multiple(flist, indir, outdir, keys, trigchan, backup_trigchan,times, 
         truee or false. whether to overwrite the files if already exist
     :param njobs:
         the number of jobs for parallel/batch processing
+    :param offset:
+        how much offset should be applied to triggers
     :return saved_files:
         A list of files we have saved
     """
@@ -41,16 +43,16 @@ def epoch_multiple(flist, indir, outdir, keys, trigchan, backup_trigchan,times, 
 
     if njobs == 1:
         for i in range(len(flist)):
-            savedfile = __epoch_individual(os.path.join(indir, flist[i]), outdir, keys, trigchan, backup_trigchan, times, overwrite)
+            savedfile = __epoch_individual(os.path.join(indir, flist[i]), outdir, keys, trigchan, backup_trigchan, times, overwrite, offset)
             saved_files.append(savedfile)
     if njobs > 1:
 
         saved_files = joblib.Parallel(n_jobs =njobs)(
-            joblib.delayed(__epoch_individual)(os.path.join(indir, thisF), outdir, keys, trigchan, backup_trigchan, times, overwrite) for thisF in flist)
+            joblib.delayed(__epoch_individual)(os.path.join(indir, thisF), outdir, keys, trigchan, backup_trigchan, times, overwrite, offset) for thisF in flist)
 
     return saved_files
 
-def __epoch_individual(file, outdir, keys, trigchan , backup_trigchan, times ,overwrite):
+def __epoch_individual(file, outdir, keys, trigchan , backup_trigchan, times ,overwrite, offset):
     """ Internal function to make epochs from raw files
     :param file:
         input file along with path
@@ -98,6 +100,8 @@ def __epoch_individual(file, outdir, keys, trigchan , backup_trigchan, times ,ov
         trigchan = backup_trigchan # reassign trig chan
 
 
+    if offset > 0:
+        events[:,0] = events[:,0] + offset
 
     picks = mne.pick_types(raw.info, meg=True, eog=True, ecg=True, include=trigchan, exclude='bads')  # select channels
     tmin, tmax = times[0], times[1]

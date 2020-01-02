@@ -40,6 +40,7 @@ subnames_only = list(set([x.split('_')[0] for x in flist])) # get a unique list 
 
 #%% source estimates for all evoked responses -- setup files
 # get all evoked files in folder
+
 all_evo = [f for f in os.listdir(mne_evo_out) if os.path.isfile(f'{mne_evo_out}/{f}')]
 # make sure they are concat files
 all_evo = [f for f in all_evo if 'concat' in f]
@@ -61,27 +62,74 @@ print(any(nonmatches))
 words = [f'{mne_evo_out}/{f}' for f in words]
 non_words = [f'{mne_evo_out}/{f}' for f in non_words]
 #%%
+tshift = -0.37
 words_e = []
 for ef in words:
     ev = mne.read_evokeds(ef)
     ev[0].pick('mag')
+    ev[0].data = np.negative(ev[0].data)
+    ev[0].shift_time(tshift)
     words_e.append(ev[0])
 
 non_words_e = []
 for ef in non_words:
     ev = mne.read_evokeds(ef)
     ev[0].pick('mag')
+    ev[0].data = np.negative(ev[0].data)
+    ev[0].shift_time(tshift)
     non_words_e.append(ev[0])
 #%% Look at topology for mag and grad
-fig = mne.viz.plot_compare_evokeds({'words':words_e[20], 'non-words':non_words_e[20]}, split_legend=True,
+fig = mne.viz.plot_compare_evokeds({'words':words_e, 'non-words':non_words_e}, split_legend=True,
                              axes="topo")
 fig[0].savefig(f'/home/ai05/comp_top_ev_mag.png')
 #fig[1].savefig(f'/home/ai05/comp_top_ev_grad.png')
 #%% based on this choose some sensors and plot comparisons
-fig = mne.viz.plot_compare_evokeds({'words':words_e, 'non-words':non_words_e},
-                                   picks=['MEG2221', 'MEG2441', 'MEG2411', 'MEG2431'],
-                                   combine='mean')
-fig[0].savefig(f'/home/ai05/comp_ev.png')
+colors = {"Words": "crimson", "Non-Words": 'steelblue'}
+
+right_parietal_temporal = ['MEG1131', 'MEG1341', 'MEG1331', 'MEG2221', 'MEG2411','MEG2421','MEG2441','MEG2231',
+                           'MEG2431']
+right_temporal = ['MEG1311','MEG1321','MEG1441','MEG1421','MEG1431','MEG1341','MEG1331','MEG2611','MEG2621',
+                  'MEG2641','MEG2421','MEG2411','MEG2631']
+
+fig, ax = plt.subplots(1, 1, figsize=(9, 4))
+
+fig2 = mne.viz.plot_compare_evokeds({'Words':words_e, 'Non-Words':non_words_e},
+                                    picks=right_parietal_temporal,
+                                    combine='mean',
+                                    axes=ax,
+                                    show_sensors=True,
+                                    colors=colors,
+
+                                    title='Evoked response to Words vs Non-Words')
+
+# plot lines with points on them
+ylims = ax.get_ylim()
+ax.axvline(x=tshift)
+ax.axvline(x=0)
+
+ax.text(tshift + 0.02, ylims[1] * 0.8, 'Stimuli Start')
+ax.text(0 + 0.02, ylims[1] * 0.8, 'Final Phoneme')
+
+ax.set_ylabel('Field Strength (fT)')
+
+fig.savefig(f'/imaging/ai05/images/comp_ev.png', dpi=500)
+
+#%% topology
+# combine evokeds for group level
+word = mne.combine_evoked(words_e, weights=[1]*len(words_e))
+non_word = mne.combine_evoked(non_words_e, weights=[1]*len(non_words_e))
+lists = {'Dev Word': word, 'Dev Non-Word': non_word}
+evokeds = lists.copy()
+# list to keep masks in for later analysis
+reg_masks = []
+
+titles = ['Words', 'Non-Words']
+times = np.arange(-0.1, 0.6, 0.1)
+fig, axes = plt.subplots(figsize=(7.5, 2.5), nrows=2)
+for i in range(len(evokeds)):
+    key = list(evokeds.keys())[i]
+    evokeds[key].plot_topomap(times, ch_type='mag', time_unit='s',
+                              title=titles[i]).savefig(f'/imaging/ai05/images/topomaps_evoked{key}.png')
 
 
 #%% Get data into acceptable format for cluster permutation testing
@@ -91,38 +139,44 @@ fig[0].savefig(f'/home/ai05/comp_ev.png')
 # we need a list of comparisons
 # each item contains a 3D matrix (participant x timepoints x sensors)
 
+X = []
+for epolist in [words_e, non_words_e]:
+    # append empty array
+    tX = np.empty((len(epolist), len(epolist[0].times), epolist[0].data.shape[0]))
+    # first dimension
+    for i in range(len(epolist)):
+        tX[i, :, :] = np.transpose(epolist[i].data, (1,0))
+    X.append(tX)
+
+# Do not flip as we did this above already
+
 #%% We first need to sort out connectivity
 # This will be a spatio-temporal connectivity matrix
-connectivity = mne.channels.find_ch_connectivity(words_e[0].info, ch_type='mag')
+connectivity2 = mne.channels.find_ch_connectivity(words_e[0].info, ch_type='mag')
 
 #%%
-threshold = 5.0  # very high, but the test is quite sensitive on this data
+threshold = 4  # very high, but the test is quite sensitive on this data
 # set family-wise p-value
 p_accept = 0.05
 
-cluster_stats = mne.stats.spatio_temporal_cluster_test(X, n_permutations=100,
-                                             threshold=threshold, tail=1,
-                                             n_jobs=1, buffer_size=None,
-                                             connectivity=connectivity[0])
+cluster_stats = mne.stats.spatio_temporal_cluster_1samp_test((X[0]-X[1]), n_permutations=5000,
+                                             threshold=threshold, tail=0,
+                                             n_jobs=10, buffer_size=None,
+                                             connectivity=connectivity2[0])
 #%% Do we have any good clusters?
 T_obs, clusters, p_values, _ = cluster_stats
 good_cluster_inds = np.where(p_values < p_accept)[0]
 
 #%% plot them
-colors = {"Dev Word": "crimson", "Dev Non-Word": 'steelblue'}
+colors = {"Words": "crimson", "Non-Words": 'steelblue'}
 linestyles = {"L": '-', "R": '--'}
 
 # get sensor positions via layout
 pos = mne.find_layout(words_e[0].info).pos
 
-# combine evokeds for group level
-word = mne.combine_evoked(words_e, weights=[1]*len(words_e))
-non_word = mne.combine_evoked(non_words_e, weights=[1]*len(non_words_e))
-evokeds = {'Dev Word': word, 'Dev Non-Word': non_word}
 
-# list to keep masks in for later analysis
+#%%
 reg_masks = []
-
 # loop over clusters
 for i_clu, clu_idx in enumerate(good_cluster_inds):
     # unpack cluster information, get unique indices
@@ -154,14 +208,14 @@ for i_clu, clu_idx in enumerate(good_cluster_inds):
     ax_colorbar = divider.append_axes('right', size='5%', pad=0.05)
     plt.colorbar(image, cax=ax_colorbar)
     ax_topo.set_xlabel(
-        'Averaged F-map ({:0.3f} - {:0.3f} s)'.format(*sig_times[[0, -1]]))
+        'Averaged T-map ({:0.3f} - {:0.3f} s)'.format(*sig_times[[0, -1]]))
 
     # add new axis for time courses and plot time courses
     ax_signals = divider.append_axes('right', size='300%', pad=1.2)
     title = 'Cluster #{0}, {1} sensor'.format(i_clu + 1, len(ch_inds))
     if len(ch_inds) > 1:
         title += "s (mean)"
-    mne.viz.plot_compare_evokeds(evokeds, title=title, picks=ch_inds, axes=ax_signals,
+    mne.viz.plot_compare_evokeds({'Words':words_e, 'Non-Words':non_words_e}, title=title, picks=ch_inds, axes=ax_signals,
                          colors=colors, show=False,
                          split_legend=True, truncate_yaxis='auto', combine='mean')
 
@@ -170,11 +224,18 @@ for i_clu, clu_idx in enumerate(good_cluster_inds):
     ax_signals.fill_betweenx((ymin, ymax), sig_times[0], sig_times[-1],
                              color='orange', alpha=0.3)
 
+    ylims = ax_signals.get_ylim()
+    ax_signals.axvline(x=tshift)
+    ax_signals.axvline(x=0)
+    ax_signals.text(tshift + 0.02, ylims[1] * 0.8, 'Stimuli Start')
+    ax_signals.text(0 + 0.02, ylims[1] * 0.8, 'Final Phoneme')
+
+    ax_signals.set_ylabel('Field Strength (fT)')
     # clean up viz
     mne.viz.tight_layout(fig=fig)
     fig.subplots_adjust(bottom=.05)
 
-    fig.savefig(f'/home/ai05/cluster_{str(i_clu)}.png')
+    fig.savefig(f'/imaging/ai05/images/new_cluster_{str(i_clu)}.png')
 
 
 #%% do thesame but with a custom function for the statistics
@@ -479,3 +540,20 @@ for i in range(stats.shape[0]):
 
 
 
+#%% Test for shifting triggers
+i = 2
+filtered_in = [f for f in os.listdir(rawdir) if 'clean_raw' in f]
+raw = mne.io.read_raw_fif(os.path.join(rawdir,filtered_in[i]), preload=True)
+events = mne.find_events(raw, shortest_event=1)
+events[:,0] = events[:,0]+370
+picks = mne.pick_types(raw.info, meg=True, eog=True, ecg=True, include=trigchan, exclude='bads')  # select channels
+keys = {'Freq': 10, 'Dev Word': 11, 'Dev Non-Word': 12}  # pass in keys
+trigchan = 'STI101_up'  # pass in the trigger channel
+backup_trigchan = 'STI102'
+epochs = mne.Epochs(raw, events, keys, -0.3, 1.0, picks=picks, baseline=(None, 0), preload=True)
+
+keys_keys = [i for i in keys.keys()]
+evokeds = [epochs[name].average() for name in keys_keys]
+MNN_word = mne.combine_evoked([evokeds[1], -evokeds[0]], weights='equal')
+MNN_word.pick_types('mag').plot_joint().savefig('/home/ai05/shifted_test.png')
+MNN_word.pick_types('mag').plot_topo().savefig('/home/ai05/shifted_test.png')

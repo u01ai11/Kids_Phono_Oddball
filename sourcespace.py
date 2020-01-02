@@ -68,7 +68,7 @@ X = red_group.src_concat_mat([fws,fns], 'fsaverage')
 #%% take difference
 og_X = copy.deepcopy(X)
 
-X = X[:,:,:,0] - X[:,:,:,1]
+X = og_X[:,:,:,1]
 #%% filter out participants with non-spatial specific responses
 # This has happened on some subjects due to annoying gradioemeter noise issues
 # but also because some children where so far away from the sensors that we ran
@@ -93,10 +93,13 @@ xav = np.average(X_filt[:,:,:], axis=2)
 # replace in the dummy object
 stc.data = xav
 
+#%%
+stc.plot(backend='matplotlib', initial_time=0.75,
+         hemi='lh').savefig('/imaging/ai05/images/nonword_SPM.png')
 #%%plot to investigate sensible-ness
 for i in range(0,1050, 50):
     stc.plot(backend='matplotlib', initial_time=i/1000,
-             hemi='lh').savefig('/home/ai05/test_SPM.png')
+             hemi='lh').savefig('/imaging/ai05/images/word_SPM.png')
 
 #%% now that is done let's run some stats - start with simple cluster t test
 
@@ -108,16 +111,17 @@ fsave_vertices = [s['vertno'] for s in src]
 connectivity = mne.spatial_src_connectivity(src)
 
 #%% one sample test
-inX = np.transpose(X_filt, [2, 1, 0]) # transpose for MNE sub x time x space
+
+inX = np.transpose(X[0], [2, 1, 0]) # transpose for MNE sub x time x space
 #%%
-threshold = 3.50  # t thresh
+threshold = 0.2  # t thresh
 # set family-wise p-value
 p_accept = 0.05
 
 T_obs, clusters, cluster_p_values, H0 = clu = \
-    mne.stats.spatio_temporal_cluster_1samp_test(inX, connectivity=connectivity, n_jobs=1,
+    mne.stats.spatio_temporal_cluster_1samp_test(np.transpose(X[:,:,:,0]-X[:,:,:,1], [2, 1, 0]), connectivity=connectivity, n_jobs=3,
                                        threshold=threshold, buffer_size=None,
-                                       verbose=True, n_permutations=10)
+                                       verbose=True, n_permutations=100)
 
 
 #%% Do we have any good clusters?
@@ -136,7 +140,7 @@ p_accept = 0.05
 
 inlist = [inX[:,:,:,0], inX[:,:,:,1]]
 
-cluster_stats = mne.stats.spatio_temporal_cluster_test(inlist, n_permutations=10,
+cluster_stats = mne.stats.spatio_temporal_cluster_test([np.transpose(X[:,:,:,0], [2, 1, 0])], n_permutations=10,
                                              threshold=threshold, tail=1,
                                              n_jobs=1, buffer_size=None,
                                              connectivity=connectivity)

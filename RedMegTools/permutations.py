@@ -328,7 +328,7 @@ print('file save complete')
 
 
 def cluster_c_corrected_permute_glm(glmdes, data, connectivity, scriptdir, filesdir, pythondir,stat='cope', nperms=5000,nomax_axis=None,
-        temporal_varcope_smoothing=None, threshold=3):
+        temporal_varcope_smoothing=None, threshold=3, doabs=False, tail=None):
     """
     :param glmdes: Design matrix
     :param data: Data
@@ -345,12 +345,14 @@ def cluster_c_corrected_permute_glm(glmdes, data, connectivity, scriptdir, files
     # scriptdir = '/imaging/ai05/phono_oddball/cluster_scripts'
     # filesdir = '/imaging/ai05/phono_oddball/cluster_files'
 
-
-    nulls = np.zeros((glmdes.num_contrasts, nperms))
-
+    if doabs:
+        nulls = np.zeros((glmdes.num_contrasts, nperms))
+    else:
+        nulls = np.zeros((glmdes.num_contrasts, nperms, 2))
     x = glmdes.design_matrix.copy()
     from copy import deepcopy
     g = deepcopy(glmdes)
+
 
     # Indices of regressors of interest for each contrast
     cinds = [np.where(glmdes.contrasts[ii, :] != 0.)[0] for ii in range(glmdes.num_contrasts)]
@@ -395,23 +397,33 @@ import _pickle
 from mne.stats.cluster_level import _find_clusters, _reshape_clusters
 
 
-def apply_permutation( X, cinds, mode ):
+def apply_permutation( x, cinds, mode ):
 
     if mode == 'sign-flip':
-        I = np.random.permutation(np.tile( [1,-1], int(X.shape[0]/2)))
-        X[:,cinds] = X[:,cinds] * I[:,None]
-    elif mode == 'row-shuffle':
-        I = np.random.permutation(X.shape[0])
-        ix = np.ix_(I,cinds) # Can't apply indexing to both dims
-        X[:,cinds] = X[ix]
+        if len(x) %2 == 0:
+            I = np.random.permutation(np.tile( [1,-1], int(x.shape[0]/2)))
+        else:
+            I = np.random.permutation(np.tile([1, -1], int(x.shape[0] / 2)))
+            I = np.append(I, 1)
 
-    return X
+        x[:,cinds] = x[:,cinds] * I[:,None]
+    elif mode == 'row-shuffle':
+        I = np.random.permutation(x.shape[0])
+        ix = np.ix_(I,cinds) # Can't apply indexing to both dims
+        x[:,cinds] = x[ix]
+
+    return x
+
 
 # prefefined stuff 
 
 ii = sys.argv[1] # input number from SLURM array 
+add = sys.argv[2] # get no of thousands to add on 
+ii = int(ii) + int(add)
 jj = {jj}
 mode = '{mode}'
+doabs = {doabs}
+
 
 #data from files 
 with open('{filesdir}/temp_info_{jj}.pkl', "rb") as f:
@@ -429,10 +441,15 @@ elif '{stat}' == 'tstat':
 else:
     print('{stat} is not a tstat or cope, please change this to run')
 # get clusters
-tstats=np.abs(tstats)
-clus, cstat = _find_clusters(tstats[jj].flatten(), threshold={threshold}, connectivity=connectivity, tail=1)
+if doabs:
+    tstats=np.abs(tstats)
+clus, cstat = _find_clusters(tstats[jj].flatten(), threshold={threshold}, connectivity=connectivity, tail={tail})
 
-out = cstat.max()
+if doabs:
+    out = cstat.max()
+else:
+    out = [cstat.min(), cstat.max()]
+    
 
 
 # save array 
@@ -449,21 +466,63 @@ print('file save complete')
         #     # template script for looping over
         #     print(ii)
 
-        # construct sh file
-        shf = f"""#!/bin/bash
+        if nperms <= 1000:
+            # construct sh file
+            shf = f"""#!/bin/bash
 #SBATCH -t 0-1:00
 #SBATCH --job-name=alex_perm_465
 #SBATCH --mincpus=1
 #SBATCH --out={jj}_%j.out
 #SBATCH --requeue 
 #SBATCH -a 1-{nperms}
-{pythondir} {scriptdir}/batch_perm_{jj}.py $SLURM_ARRAY_TASK_ID
-                  """
-        # save to directory
-        print(shf, file=open(f'{scriptdir}/batch_perm_{jj}.csh', 'w'))
+{pythondir} {scriptdir}/batch_perm_{jj}.py $SLURM_ARRAY_TASK_ID 0
+                      """
+            # save to directory
+            print(shf, file=open(f'{scriptdir}/batch_perm_{jj}.csh', 'w'))
 
-        # execute this on the cluster
-        os.system(f'sbatch {scriptdir}/batch_perm_{jj}.csh')
+            # execute this on the cluster
+            os.system(f'sbatch {scriptdir}/batch_perm_{jj}.csh')
+        else:
+
+            # max array size is 1000 so break it into parts of that size
+            num_thousands = int(nperms/1000)
+            remainder = int(nperms%1000)
+
+            for ii in range(num_thousands):
+                # construct sh file
+                to_add = ii*1000
+                shf = f"""#!/bin/bash
+#SBATCH -t 0-1:00
+#SBATCH --job-name=alex_perm_465
+#SBATCH --mincpus=1
+#SBATCH --out={jj}_{ii}%j.out
+#SBATCH --requeue 
+#SBATCH -a 1-1000
+{pythondir} {scriptdir}/batch_perm_{jj}.py $SLURM_ARRAY_TASK_ID {to_add}
+                                  """
+                # save to directory
+                print(shf, file=open(f'{scriptdir}/batch_perm_{jj}_{ii}.csh', 'w'))
+
+                # execute this on the cluster
+                os.system(f'sbatch {scriptdir}/batch_perm_{jj}_{ii}.csh')
+
+            if remainder > 0:
+                # construct sh file
+                to_add = (num_thousands+1)*1000
+                shf = f"""#!/bin/bash
+#SBATCH -t 0-1:00
+#SBATCH --job-name=alex_perm_465
+#SBATCH --mincpus=1
+#SBATCH --out={jj}_{ii}%j.out
+#SBATCH --requeue 
+#SBATCH -a 1-1000
+{pythondir} {scriptdir}/batch_perm_{jj}.py $SLURM_ARRAY_TASK_ID {to_add}
+                                  """
+                # save to directory
+                print(shf, file=open(f'{scriptdir}/batch_perm_{jj}_remain.csh', 'w'))
+
+                # execute this on the cluster
+                os.system(f'sbatch {scriptdir}/batch_perm_{jj}_remain.csh')
 
     # wait until all permutations are done
     starttime = time.time()
@@ -493,7 +552,11 @@ print('file save complete')
             # load
             try:
                 infile = np.load(f'{filesdir}/{jj}_{ii}.npy')
-                nulls[jj, ii] = float(infile)
+
+                if doabs:
+                    nulls[jj, ii] = float(infile)
+                else:
+                    nulls[jj, ii] = infile
             except FileNotFoundError:
                 print(f'missing {filesdir}/{jj}_{ii}.npy')
 
@@ -504,7 +567,12 @@ print('file save complete')
 def apply_permutation( x, cinds, mode ):
 
     if mode == 'sign-flip':
-        I = np.random.permutation(np.tile( [1,-1], int(x.shape[0]/2)))
+        if len(x) %2 == 0:
+            I = np.random.permutation(np.tile( [1,-1], int(x.shape[0]/2)))
+        else:
+            I = np.random.permutation(np.tile([1, -1], int(x.shape[0] / 2)))
+            I = np.append(I, 1)
+
         x[:,cinds] = x[:,cinds] * I[:,None]
     elif mode == 'row-shuffle':
         I = np.random.permutation(x.shape[0])
